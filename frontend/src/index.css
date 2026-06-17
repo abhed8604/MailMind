@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base typography / scrollbars. Dark-first; light mode handled via .paper on
+   the root container rather than flipping the body, so we keep one stable
+   default.
+--------------------------------------------------------------------------- */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-ink-200 font-sans antialiased;
+  margin: 0;
+}
+
+/* Monospace for email metadata is applied via the .font-mono utility. */
+
+/* Thin, unobtrusive scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Skeleton shimmer used by loading placeholders. */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #1a1a1a 25%, #242424 37%, #1a1a1a 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Rendered email body should read like prose, not be constrained by app
+   typography. We scope it so Tailwind preflight doesn't strip all styling. */
+.email-body {
+  @apply text-ink-200 leading-relaxed text-[15px];
+}
+.email-body a { @apply text-accent-blue underline; }
+.email-body p { margin: 0 0 0.75em; }
+.email-body ul, .email-body ol { margin: 0 0 0.75em 1.25em; }
+.email-body b, .email-body strong { @apply text-ink-100 font-semibold; }
+.email-body code { @apply font-mono text-[13px] bg-ink-800 px-1 py-0.5 rounded; }
+
+/* Light theme overrides when the root has the `light` class. */
+.light body { @apply bg-paper text-paper-text; }
+.light .email-body { @apply text-paper-text; }
+.light .email-body b, .light .email-body strong { @apply text-black; }

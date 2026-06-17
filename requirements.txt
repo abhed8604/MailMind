@@ -1,0 +1,16 @@
+# Pinned loosely so pip can resolve Python-3.14-compatible wheels.
+# (cp314 wheels for pydantic-core / cryptography only exist in recent releases.)
+fastapi>=0.115
+uvicorn[standard]>=0.34
+sqlalchemy>=2.0.36
+google-auth-oauthlib>=1.2.1
+google-api-python-client>=2.156
+google-auth-httplib2>=0.2.0
+apscheduler>=3.11
+cryptography>=44
+keyring>=25.6
+httpx>=0.28
+python-dotenv>=1.0
+tenacity>=9.0
+pydantic>=2.11
+pydantic-settings>=2.7

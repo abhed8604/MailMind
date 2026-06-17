@@ -1,0 +1,29 @@
+import { categoryMeta, scoreBadgeClass } from '../lib/categories'
+
+/**
+ * Two-part badge: a category chip (emoji + label) and, for important emails,
+ * a numeric score chip. Only renders what exists on the email.
+ */
+export default function TriageBadge({ email, compact = false }) {
+  const hasTriage = email.scanned_at != null
+  if (!hasTriage && email.importance_score == null) return null
+
+  const cat = categoryMeta(email.category)
+  const showScore = email.important || email.importance_score != null
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {email.category && (
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${cat.bg} ${cat.text} ${cat.ring}`}>
+          <span>{cat.emoji}</span>
+          {!compact && <span>{cat.label}</span>}
+        </span>
+      )}
+      {showScore && (
+        <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-mono font-semibold ${scoreBadgeClass(email.importance_score)}`}>
+          {email.importance_score}
+        </span>
+      )}
+    </div>
+  )
+}
