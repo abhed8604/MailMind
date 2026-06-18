@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .. import accounts as accounts_mod
 from .. import gmail_sync
-from ..database import Account, get_db, get_setting, set_setting
+from ..database import Account, get_db, get_setting
 from ..mock_data import MOCK_ACCOUNT_EMAIL
 
 log = logging.getLogger("mailmind.routes.accounts")
@@ -28,36 +29,70 @@ def list_accounts(db: Session = Depends(get_db)) -> dict[str, Any]:
 
 @router.post("/oauth/start")
 def start_oauth() -> dict[str, Any]:
-    """Run the desktop OAuth flow (opens browser, blocks until complete)."""
+    """Run the desktop OAuth flow + inline historical sync.
+
+    Blocks until consent is captured, then fetches the initial batch of
+    historical emails synchronously. Returns the account dict plus an
+    ``initial_sync`` summary with the number fetched (or an error).
+    """
     try:
         account = accounts_mod.start_oauth_flow()
     except FileNotFoundError as exc:
         raise HTTPException(409, str(exc))  # credentials.json missing
-    except Exception as exc:  # pragma: no cover - OAuth edge cases
+    except Exception as exc:
         log.exception("OAuth flow failed")
         raise HTTPException(500, f"OAuth flow failed: {exc}")
     return {"account": account}
 
 
 @router.post("/{account_id}/sync")
-def trigger_sync(account_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Kick off an initial/partial sync for one account in the background."""
+def trigger_sync(
+    account_id: int,
+    background: bool = Query(True),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Kick off a sync for one account.
+
+    * ``background=false`` → runs synchronously, blocks until done or error.
+      Used by callers that want a real fetched-count response.
+    * ``background=true`` (default) → runs in a daemon thread, returns
+      ``{"status": "started"}`` immediately.
+    """
     account = db.get(Account, account_id)
     if account is None:
         raise HTTPException(404, "Account not found")
 
-    initial_count = get_setting(db, "initial_fetch_count")
-    # Detach attributes we need before the session closes.
+    if account.email == MOCK_ACCOUNT_EMAIL:
+        return {"status": "noop", "account": account.email}
+
+    initial_count = int(get_setting(db, "initial_fetch_count"))
     email, account_id_local = account.email, account.id
 
-    import threading
-    # Re-fetch a fresh ORM object inside the background thread's own session.
+    if not background:
+        # Synchronous — caller wants a real result.
+        from ..database import SessionLocal
+        with SessionLocal() as s:
+            acc = s.get(Account, account_id_local)
+            if acc is None:
+                raise HTTPException(404, "Account vanished during sync")
+            try:
+                result = gmail_sync.sync_account(acc, initial_count=initial_count)
+                return {**result, "account": email}
+            except Exception as exc:
+                log.exception("Synchronous sync failed for %s", email)
+                raise HTTPException(500, f"Sync failed: {exc}")
+
+    # Background — fire-and-forget with proper error handling.
     def _bg():
         from ..database import SessionLocal
         with SessionLocal() as s:
             acc = s.get(Account, account_id_local)
             if acc:
-                gmail_sync.sync_account(acc, initial_count=initial_count)
+                try:
+                    gmail_sync.sync_account(acc, initial_count=initial_count)
+                except Exception:
+                    log.exception("Background sync failed for %s", email)
+
     threading.Thread(target=_bg, daemon=True).start()
     return {"status": "started", "account": email}
 

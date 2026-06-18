@@ -26,7 +26,7 @@ from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
 
 from .accounts import NeedsReauthError, build_gmail_service
-from .database import Account, Email
+from .database import Account, Email, SessionLocal
 
 log = logging.getLogger("mailmind.sync")
 
@@ -197,21 +197,30 @@ def _coerce_fields(fields: dict[str, Any]) -> dict[str, Any]:
 
 def _store_messages(db: Session, account: Account, message_ids: list[str],
                     service: Any) -> int:
-    """Batch-fetch full messages by id and persist. Returns count stored."""
-    import json as _json
+    """Batch-fetch full messages by id and persist. Returns count stored.
+
+    A single message failing (transient 5xx, deleted between list+get, etc.)
+    is logged and skipped — it must NOT abort the whole batch, otherwise one
+    bad message out of 500 would lose the other 499.
+    """
     stored = 0
     for mid in message_ids:
-        msg = _with_backoff(
-            lambda m=mid: service.users()
-            .messages()
-            .get(userId="me", id=m, format="full")
-            .execute()
-        )
-        fields = _message_to_dict(msg)
-        _upsert_email(db, account.id, fields)
-        stored += 1
-        if stored % 25 == 0:
-            db.commit()
+        try:
+            msg = _with_backoff(
+                lambda m=mid: service.users()
+                .messages()
+                .get(userId="me", id=m, format="full")
+                .execute()
+            )
+            fields = _message_to_dict(msg)
+            _upsert_email(db, account.id, fields)
+            stored += 1
+            if stored % 25 == 0:
+                db.commit()
+        except HttpError as exc:
+            log.warning("Skipping message %s for %s: %s", mid, account.email, exc)
+            db.rollback()  # drop any partial state for this message
+            continue
     db.commit()
     return stored
 
@@ -251,10 +260,13 @@ def initial_sync(account: Account, max_results: int) -> dict[str, Any]:
 
 def incremental_sync(account: Account) -> dict[str, Any]:
     """Fetch only changes since the last stored ``historyId``."""
+    account_id = account.id
     with SessionLocal() as db:
-        db.refresh(account)
-        since = account.history_id
-        paused = account.paused
+        fresh = db.get(Account, account_id)
+        if fresh is None:
+            return {"account": account.email, "fetched": 0, "mode": "account_missing"}
+        since = fresh.history_id
+        paused = fresh.paused
 
     if paused:
         return {"account": account.email, "fetched": 0, "mode": "skipped_paused"}
@@ -296,20 +308,40 @@ def incremental_sync(account: Account) -> dict[str, Any]:
 
 def _update_history_and_sync(db: Session, account: Account, service: Any,
                              now: _dt.datetime) -> None:
-    """Refresh the stored historyId (current mailbox state) + last_synced_at."""
-    try:
-        profile = _with_backoff(
-            lambda: service.users().getProfile(userId="me").execute()
-        )
-        new_hist = profile.get("historyId")
-        row = db.get(Account, account.id)
-        if row:
-            if new_hist:
-                row.history_id = new_hist
-            row.last_synced_at = now
-            db.commit()
-    except HttpError as exc:  # pragma: no cover
-        log.warning("getProfile during sync failed for %s: %s", account.email, exc)
+    """Refresh the stored historyId (current mailbox state) + last_synced_at.
+
+    The historyId is essential — without it every future sync falls back to a
+    full pull. If getProfile fails transiently we retry once; if it still fails
+    we log loudly so the operator knows the next sync won't be incremental.
+    """
+    profile = None
+    for attempt in range(2):
+        try:
+            profile = _with_backoff(
+                lambda: service.users().getProfile(userId="me").execute()
+            )
+            break
+        except HttpError as exc:
+            if attempt == 0:
+                log.warning("getProfile attempt 1 failed for %s: %s; retrying",
+                            account.email, exc)
+                continue
+            log.error("getProfile failed twice for %s — historyId NOT updated. "
+                      "Next sync will not be incremental.", account.email)
+            # Still record last_synced_at so the UI shows a recent attempt.
+            row = db.get(Account, account.id)
+            if row:
+                row.last_synced_at = now
+                db.commit()
+            return
+
+    new_hist = profile.get("historyId") if profile else None
+    row = db.get(Account, account.id)
+    if row:
+        if new_hist:
+            row.history_id = new_hist
+        row.last_synced_at = now
+        db.commit()
 
 
 def sync_account(account: Account, *, initial_count: int | None = None) -> dict[str, Any]:

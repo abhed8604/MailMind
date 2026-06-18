@@ -17,13 +17,19 @@ touches your machine and Gmail's own API.
   (`gemma3:4b` by default) into `important` + a category
   (`action_required`, `deadline`, `financial`, `personal`, `newsletter`,
   `spam`, `other`), with a 0–10 score and a one-line reason.
-- **Incremental sync** — first launch fetches the last N emails; afterwards a
+- **Incremental sync** — first connect fetches your last N emails; afterwards a
   background job uses Gmail's `historyId` to pull only what changed every few
   minutes.
+- **Stays connected across restarts** — tokens persist (encrypted), and on every
+  launch MailMind refreshes them and resumes syncing automatically. No
+  re-authentication needed unless you revoke access.
 - **Encrypted token storage** — OAuth tokens are Fernet-encrypted at rest in
   `~/.mailmind/accounts.json`; the encryption key lives in your OS keyring.
+- **Single-command launcher** — `./mailmind` builds the frontend once and serves
+  everything (API + UI) from one process on a single port.
 - **Demo mode** — seed the UI with ~30 realistic mock emails so you can explore
-  it before connecting real accounts or pulling a model.
+  it before connecting real accounts or pulling a model (auto-disables once you
+  connect a real account).
 - **Dark-first UI** — near-black surfaces, monospace metadata, amber accents for
   important mail, skeleton loaders, toast notifications.
 
@@ -34,13 +40,13 @@ touches your machine and Gmail's own API.
 | Tool   | Version            | Notes                                            |
 |--------|--------------------|--------------------------------------------------|
 | Python | 3.11+ (tested 3.14)| Backend                                          |
-| Node   | 18+ (tested 22)    | Frontend dev server                              |
+| Node   | 18+ (tested 22)    | Frontend build (one-time; not needed at runtime) |
 | Ollama | any recent         | Local LLM runtime — `ollama.com`                 |
 
 Install Ollama and pull the default model:
 
 ```bash
-ollama pull gemma3:4b   # ~2.5 GB, one-time
+ollama pull hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL   # ~2.5 GB, one-time
 ```
 
 ---
@@ -85,27 +91,34 @@ cd frontend && npm install && cd ..
 ### 3. Run
 
 ```bash
-./start.sh
+./mailmind
 ```
 
-This starts:
-- the FastAPI backend on `http://localhost:8000`, and
-- the Vite dev server on `http://localhost:5173`,
+This is the **single command**: it ensures the Python venv + deps are installed,
+builds the frontend once (cached afterward), then starts **one** uvicorn process
+that serves both the API and the built UI on `http://localhost:8000`, and opens
+your browser.
 
-then opens your browser at `http://localhost:5173`.
+> **Dev mode** (with Vite hot-reload): `./mailmind --dev` — runs the backend on
+> `:8000` and Vite on `:5173` (API requests proxy through to the backend).
+
+> **Just build the frontend** (no server): `./mailmind --build`.
 
 **On first launch the app runs in Demo Mode** — it seeds ~30 fake emails (some
-already triaged) so the UI is fully explorable with zero setup. Once you add a
-real Gmail account it takes over.
+already triaged) so the UI is fully explorable with zero setup. Demo mode
+**auto-disables** the moment you connect a real Gmail account.
 
-### 4. Connect a Gmail account
+### 4. Connect a Gmail account (do this once)
 
 1. Open **Settings → Gmail Accounts → Add Gmail Account**.
 2. Your browser opens Google's consent screen. Approve.
-3. The backend captures the OAuth redirect, stores the (encrypted) token, and
-   starts an initial sync.
+3. The backend captures the OAuth redirect, stores the **encrypted** token, and
+   immediately pulls your **last 500 historical emails** (configurable) —
+   inline, so you see them appear right away.
 
-Repeat for as many accounts as you like.
+Repeat for as many accounts as you like. **From now on, every time you run
+`./mailmind`, all your accounts reconnect automatically** — no re-consent
+needed, and incremental sync resumes within seconds.
 
 ### 5. Run triage
 
@@ -167,10 +180,10 @@ All config lives in the SQLite `settings` table and is editable from the UI:
 | `sync_interval_minutes`| `5`                      | How often the background sync runs.            |
 | `initial_fetch_count`  | `500`                    | Emails pulled on first connect.                |
 | `ollama_base_url`      | `http://localhost:11434` | Ollama HTTP endpoint.                          |
-| `ollama_model`         | `gemma3:4b`              | Model used for triage.                         |
+| `ollama_model`         | `hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL` | Model used for triage. |
 | `auto_scan`            | `true`                   | Auto-triage new emails after each sync.        |
 | `importance_threshold` | `6`                      | Minimum score to appear in Important.          |
-| `mock_mode`            | `true`                   | Seed demo data when no real accounts exist.    |
+| `mock_mode`            | `true`                   | Auto-disabled once a real account is connected. |
 | `dark_mode`            | `true`                   | Dark vs light theme.                           |
 
 ---

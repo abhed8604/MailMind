@@ -98,6 +98,17 @@ def start_oauth_flow() -> dict[str, Any]:
     creds: Credentials = flow.run_local_server(port=0, access_type="offline",
                                                prompt="consent", timeout_seconds=300)
 
+    # Validate that we actually got a refresh_token. Without it the access token
+    # will expire within the hour and the account can never reconnect — fail
+    # loudly here rather than letting it silently break on the next sync.
+    if not creds.refresh_token:
+        raise RuntimeError(
+            "Google did not return a refresh token. Re-add the account; if it "
+            "still fails, revoke MailMind at myaccount.google.com/permissions "
+            "first (the consent screen only issues refresh tokens on a fresh "
+            "grant)."
+        )
+
     profile = _fetch_profile(creds)
     email = profile.get("emailAddress")
     if not email:
@@ -116,7 +127,24 @@ def start_oauth_flow() -> dict[str, Any]:
         security.save_accounts_file(accounts)
 
         account = upsert_account_row(db, email, color, creds)
-        return account.to_dict()
+
+    # Inline historical pull: fetch the initial batch BEFORE returning so the
+    # user actually sees mail (and gets a real success/failure) the moment they
+    # connect — not a silent fire-and-forget. Counts come from settings.
+    from . import gmail_sync
+    from .database import SessionLocal as _SL, get_setting
+    with _SL() as db:
+        initial_count = int(get_setting(db, "initial_fetch_count"))
+    try:
+        with _SL() as db:
+            fresh = db.get(Account, account.id)
+            result = gmail_sync.initial_sync(fresh, initial_count)
+    except Exception as exc:
+        log.exception("Initial historical sync failed for %s", email)
+        # The account is connected; we just couldn't pull history yet. Surface
+        # it so the UI can tell the user to retry via "Sync now".
+        return {**account.to_dict(), "initial_sync": {"fetched": 0, "error": str(exc)}}
+    return {**account.to_dict(), "initial_sync": result}
 
 
 def _fetch_profile(creds: Credentials) -> dict[str, Any]:
@@ -205,13 +233,25 @@ def build_gmail_service(account: Account) -> Any:
         raise NeedsReauthError(f"No stored credentials for {account.email}")
 
     if not creds.valid and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            _persist_refreshed_credentials(account, creds)
-        except RefreshError as exc:
-            log.warning("Refresh failed for %s: %s", account.email, exc)
+        # Retry once on a transient refresh failure before declaring the
+        # account dead — Google's token endpoint occasionally 500s.
+        last_exc: Exception | None = None
+        for attempt in range(2):
+            try:
+                creds.refresh(Request())
+                _persist_refreshed_credentials(account, creds)
+                last_exc = None
+                break
+            except RefreshError as exc:
+                last_exc = exc
+                log.warning("Refresh attempt %d failed for %s: %s",
+                            attempt + 1, account.email, exc)
+                if attempt == 0:
+                    import time
+                    time.sleep(1.5)
+        if last_exc is not None:
             _flag_needs_reauth(account, True)
-            raise NeedsReauthError(str(exc)) from exc
+            raise NeedsReauthError(str(last_exc)) from last_exc
 
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 

@@ -51,7 +51,7 @@ SAMPLES = [
 
 def main() -> int:
     base = "http://localhost:11434"
-    model = "gemma3:4b"
+    model = "hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL"
 
     print(f"Testing Ollama connection at {base}…")
     conn = llm_triage.test_connection(base)

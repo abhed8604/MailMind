@@ -165,7 +165,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "sync_interval_minutes": 5,
     "initial_fetch_count": 500,
     "ollama_base_url": "http://localhost:11434",
-    "ollama_model": "gemma3:4b",
+    "ollama_model": "hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL",
     "auto_scan": True,
     "importance_threshold": 6,
     "mock_mode": True,

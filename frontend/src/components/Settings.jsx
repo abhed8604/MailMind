@@ -43,11 +43,18 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
     onToast?.info('Opening browser for Gmail consent…')
     try {
       const { account } = await startOAuth()
-      onToast?.success(`Connected ${account.email}. Syncing…`)
+      // The backend now fetches the initial historical batch inline.
+      // account.initial_sync has {fetched, mode, error?}.
+      const syncInfo = account.initial_sync || {}
+      const count = syncInfo.fetched
+      const err = syncInfo.error
+      if (err) {
+        onToast?.error(`Connected ${account.email} but sync failed: ${err}. Try "Sync now" in the inbox.`)
+      } else {
+        onToast?.success(`Connected ${account.email}. Fetched ${count ?? '?'} historical email(s).`)
+      }
       await loadAll()
       onAccountsChanged?.()
-      // Kick off the initial fetch in the background.
-      triggerAccountSync(account.id).catch(() => {})
     } catch (e) {
       const msg = e?.response?.data?.detail || e.message
       onToast?.error(`Add account failed: ${msg}`)

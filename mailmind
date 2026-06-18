@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# MailMind — single-command launcher.
+#
+# Ensures deps, builds the frontend, starts ONE uvicorn process that serves both
+# the API and the built SPA on http://localhost:8000.
+#
+# Usage:
+#   ./mailmind            start (foreground, Ctrl-C to stop)
+#   ./mailmind --dev      dev mode: two processes (Vite HMR + backend)
+#   ./mailmind --build    only build the frontend, don't start
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+DEV_MODE=false
+BUILD_ONLY=false
+case "${1:-}" in
+  --dev)    DEV_MODE=true ;;
+  --build)  BUILD_ONLY=true ;;
+esac
+
+# ---- preflight: Python ----------------------------------------------------
+if [[ ! -d backend/.venv ]]; then
+  echo "→ Creating Python venv…"
+  python3 -m venv backend/.venv
+  backend/.venv/bin/pip install --upgrade pip -q
+fi
+if ! backend/.venv/bin/pip show fastapi -q >/dev/null 2>&1; then
+  echo "→ Installing Python deps…"
+  backend/.venv/bin/pip install -r requirements.txt -q
+fi
+
+# ---- preflight: frontend build --------------------------------------------
+DIST="frontend/dist"
+NEEDS_BUILD=false
+if [[ ! -d "$DIST" ]] || [[ ! -f "$DIST/index.html" ]]; then
+  NEEDS_BUILD=true
+fi
+if [[ "$NEEDS_BUILD" == true || "$BUILD_ONLY" == true ]]; then
+  if [[ ! -d frontend/node_modules ]]; then
+    echo "→ Installing frontend deps…"
+    (cd frontend && npm install)
+  fi
+  echo "→ Building frontend…"
+  (cd frontend && npm run build)
+  echo "→ Built to $DIST/"
+fi
+if [[ "$BUILD_ONLY" == true ]]; then
+  exit 0
+fi
+
+# ---- run ------------------------------------------------------------------
+cleanup() { echo; echo "→ Stopping MailMind…"; kill 0 2>/dev/null || true; }
+trap cleanup EXIT INT TERM
+
+if [[ "$DEV_MODE" == true ]]; then
+  echo "→ [dev mode] Starting backend on :8000 and Vite on :5173…"
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+  (cd frontend && npm run dev) &
+  sleep 3
+  URL="http://localhost:5173"
+else
+  echo "→ Starting MailMind on :8000 …"
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+  URL="http://localhost:8000"
+fi
+
+sleep 2
+
+# Open browser if possible.
+if command -v xdg-open >/dev/null 2>&1; then
+  (xdg-open "$URL" >/dev/null 2>&1 &) || true
+elif command -v open >/dev/null 2>&1; then
+  (open "$URL" >/dev/null 2>&1 &) || true
+fi
+
+echo
+echo "✓ MailMind running at $URL"
+echo "  (Ctrl-C to stop)"
+echo
+wait
