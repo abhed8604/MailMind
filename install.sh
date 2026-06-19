@@ -226,17 +226,17 @@ if [[ -n "${CHOSEN_MODEL:-}" ]] || command -v ollama >/dev/null 2>&1; then
   echo
   echo "${BOLD}  Choose an LLM model for email triage:${RST}"
   echo
-  echo "  ${CYAN}1)${RST} Qwen3-4B-Instruct  (default, ~2.5 GB, best balance)"
-  echo "  ${CYAN}2)${RST} Llama 3.1 8B        (more capable, ~4.7 GB)"
-  echo "  ${CYAN}3)${RST} Qwen2.5 3B           (lighter & faster, ~1.9 GB)"
-  echo "  ${CYAN}4)${RST} TinyLlama 1.1B       (very light, ~638 MB)"
+  echo "  ${CYAN}1)${RST} Gemma 4 E2B (default, efficient & fast)"
+  echo "  ${CYAN}2)${RST} Llama 3.1 8B       (more capable, ~4.7 GB)"
+  echo "  ${CYAN}3)${RST} Qwen2.5 3B          (lighter & faster, ~1.9 GB)"
+  echo "  ${CYAN}4)${RST} TinyLlama 1.1B      (very light, ~638 MB)"
   echo "  ${CYAN}5)${RST} Skip — I'll choose a model later"
   echo
   prompt "  Enter choice [1-5]"
   read -r MODEL_CHOICE
 
   case "${MODEL_CHOICE:-1}" in
-    1) CHOSEN_MODEL="hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL" ;;
+    1) CHOSEN_MODEL="hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS" ;;
     2) CHOSEN_MODEL="llama3.1:8b" ;;
     3) CHOSEN_MODEL="qwen2.5:3b" ;;
     4) CHOSEN_MODEL="tinyllama:1.1b" ;;
@@ -245,8 +245,8 @@ if [[ -n "${CHOSEN_MODEL:-}" ]] || command -v ollama >/dev/null 2>&1; then
       CHOSEN_MODEL=""
       ;;
     *)
-      warn "Invalid choice. Defaulting to Qwen3-4B-Instruct."
-      CHOSEN_MODEL="hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL"
+      warn "Invalid choice. Defaulting to Gemma 4 E2B."
+      CHOSEN_MODEL="hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS"
       ;;
   esac
 

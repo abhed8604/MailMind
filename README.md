@@ -14,7 +14,7 @@ touches your machine and Gmail's own API.
 - **Multi-account unified inbox** — every connected Gmail account in one
   chronological feed, each email tagged with a color-coded account dot.
 - **Local LLM triage** — each email is classified by a local model
-  (`hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL` by default) into
+  (`hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` by default) into
   `important` + a category (`action_required`, `deadline`, `financial`,
   `personal`, `newsletter`, `spam`, `other`), with a 0–10 score and a one-line
   reason.
@@ -52,7 +52,7 @@ touches your machine and Gmail's own API.
 Install Ollama and pull the default model:
 
 ```bash
-ollama pull hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL   # ~2.5 GB, one-time
+ollama pull hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS   # one-time
 ```
 
 ---
@@ -232,7 +232,7 @@ All config lives in the SQLite `settings` table and is editable from the UI:
 | `sync_interval_minutes`| `5`                      | How often the background sync runs.            |
 | `initial_fetch_count`  | `500`                    | Emails pulled on first connect.                |
 | `ollama_base_url`      | `http://localhost:11434` | Ollama HTTP endpoint.                          |
-| `ollama_model`         | `hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL` | Model used for triage. |
+| `ollama_model`         | `hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` | Model used for triage. |
 | `auto_scan`            | `true`                   | Auto-triage new emails after each sync.        |
 | `importance_threshold` | `7`                      | Minimum score to appear in Important.          |
 | `mock_mode`            | `true`                   | Auto-disabled once a real account is connected. |
