@@ -59,7 +59,43 @@ ollama pull hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL   # ~2.5 GB, on
 
 ## Setup
 
-### 1. Gmail OAuth credentials (the one manual step)
+There are two ways to get started: the **one-shot installer** (recommended for
+new machines) or the **manual setup** (if you've already cloned the repo).
+
+### Quick start: one-shot installer
+
+A single bootstrap script clones the repo, installs Ollama, lets you pick an LLM
+model from a menu, sets up the Python venv + Node deps, and walks you through a
+`credentials.json` wizard — then offers to launch the app.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/abhed8604/MailMind/main/install.sh | bash
+```
+
+Or, if you've already cloned the repo:
+
+```bash
+bash install.sh
+```
+
+The installer will prompt you for:
+
+- **Install location** — where to clone MailMind (defaults to `~/MailMind`).
+- **Ollama** — installs it if missing (Linux: `ollama.com` installer; macOS:
+  Homebrew if available).
+- **LLM model** — pick from a menu: Qwen3-4B (default), Llama 3.1 8B, Qwen2.5
+  3B, TinyLlama 1.1B, or skip and pull later.
+- **`credentials.json`** — paste your Google OAuth Desktop JSON directly, or
+  skip and add it later at `backend/credentials.json`.
+- **Launch** — start the app immediately via `./mailmind`, or exit and run it
+  yourself.
+
+It's idempotent: re-running it skips already-done steps (Ollama installed, venv
+present, deps installed), so it doubles as an updater.
+
+### Manual setup
+
+#### 1. Gmail OAuth credentials (the one manual step)
 
 MailMind needs its own OAuth "Desktop app" client to talk to Gmail on your
 behalf.
@@ -81,7 +117,7 @@ behalf.
 
 > This file is in `.gitignore`. Never commit it.
 
-### 2. Install dependencies
+#### 2. Install dependencies
 
 The first run of `start.sh` installs everything, but you can do it manually:
 
@@ -94,7 +130,7 @@ backend/.venv/bin/pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
-### 3. Run
+#### 3. Run
 
 ```bash
 ./mailmind
@@ -109,6 +145,9 @@ your browser.
 > `:8000` and Vite on `:5173` (API requests proxy through to the backend).
 
 > **Just build the frontend** (no server): `./mailmind --build`.
+
+> **Stop the server**: press `Ctrl-C` in the terminal — it cleanly kills the
+> backend and frees port 8000.
 
 **On first launch the app runs in Demo Mode** — it seeds ~30 fake emails (some
 already triaged) so the UI is fully explorable with zero setup. Demo mode
@@ -168,6 +207,7 @@ mailmind/
 │       └── lib/             # categories.js, company.js (sender→brand)
 ├── start.sh                 # Dev launcher (backend :8000 + Vite :5173)
 ├── mailmind                 # Single-command launcher (build + serve on :8000)
+├── install.sh               # One-shot bootstrap installer (clone + deps + Ollama + wizard)
 ├── requirements.txt
 └── README.md
 ```
