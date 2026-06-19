@@ -31,10 +31,8 @@ log = logging.getLogger("mailmind.triage")
 DEFAULT_TIMEOUT = 60.0  # generation can be slow on CPU
 CONNECT_TIMEOUT = 3.0   # quick failure if Ollama isn't running
 
-VALID_CATEGORIES = {
-    "action_required", "deadline", "financial",
-    "personal", "newsletter", "spam", "other",
-}
+# Known importance levels from the LLM. CRITICAL and HIGH are "important".
+IMPORTANT_LEVELS = {"critical", "high"}
 
 
 class TriageUnavailable(Exception):
@@ -54,6 +52,8 @@ class TriageResult:
     score: int
     reason: str
     category: str
+    summary: str = ""
+    action_required: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -78,17 +78,38 @@ def test_connection(base_url: str, timeout: float = CONNECT_TIMEOUT) -> dict[str
 # ---------------------------------------------------------------------------
 # Prompt
 # ---------------------------------------------------------------------------
-PROMPT_TEMPLATE = """You are an email importance classifier. Analyze this email and respond ONLY with valid JSON.
+PROMPT_TEMPLATE = """{rules}
 
-Email:
-From: {sender}
-Subject: {subject}
-Body: {body}
+------------------------
+EMAIL TO ANALYZE
+------------------------
 
-Respond with:
-{{"important": true/false, "score": 0-10, "reason": "one sentence explanation", "category": "action_required|deadline|financial|personal|newsletter|spam|other"}}
+Subject:
+{subject}
 
-Respond with ONLY the JSON object, no other text."""
+From:
+{sender}
+
+To:
+{to}
+
+Body:
+{body}"""
+
+
+def _load_custom_rules() -> str:
+    """Load the user's custom rules from ~/.mailmind/triage_rules.md.
+
+    Imported lazily so a problem with the rules file never blocks module import.
+    """
+    try:
+        from . import triage_rules
+        rules = (triage_rules.load_rules() or "").strip()
+        if rules:
+            return rules
+    except Exception as exc:  # pragma: no cover - best effort
+        log.warning("Could not load custom triage rules: %s", exc)
+    return ""
 
 
 def _build_prompt(email: dict[str, Any]) -> str:
@@ -97,7 +118,9 @@ def _build_prompt(email: dict[str, Any]) -> str:
         body = body[:1500]
     sender = (email.get("sender_name") or email.get("sender_email") or "Unknown").strip()
     subject = (email.get("subject") or "(no subject)").strip()
-    return PROMPT_TEMPLATE.format(sender=sender, subject=subject, body=body)
+    to_addr = (email.get("recipient_email") or "me").strip()
+    rules = _load_custom_rules()
+    return PROMPT_TEMPLATE.format(sender=sender, subject=subject, body=body, to=to_addr, rules=rules)
 
 
 # ---------------------------------------------------------------------------
@@ -147,24 +170,48 @@ def _extract_json(raw: str) -> dict[str, Any]:
 
 
 def _coerce_result(parsed: dict[str, Any]) -> TriageResult:
-    """Validate + clamp the model's fields into a TriageResult."""
+    """Validate + clamp the model's fields into a TriageResult.
+
+    The model returns:
+      importance: CRITICAL | HIGH | MEDIUM | LOW
+      score: 0-100
+      category: free-form string (e.g. "Job", "Security", "Finance")
+      action_required: bool
+      reason: string
+      summary: string
+    """
+    # Score: 0-100 scale
     raw_score = parsed.get("score", 0)
     try:
         score = int(round(float(raw_score)))
     except (TypeError, ValueError):
         score = 0
-    score = max(0, min(10, score))
+    score = max(0, min(100, score))
 
-    category = str(parsed.get("category") or "other").strip().lower()
-    if category not in VALID_CATEGORIES:
-        category = "other"
+    # Category: accept any string, title-case it
+    raw_cat = str(parsed.get("category") or "").strip()
+    category = raw_cat.title() if raw_cat else "Other"
 
-    important_flag = parsed.get("important")
-    important = bool(important_flag) if isinstance(important_flag, bool) else (score >= 6)
+    # Important: based on importance level label
+    raw_importance = str(parsed.get("importance") or "").strip().upper()
+    important = raw_importance in IMPORTANT_LEVELS
+
+    # Action required: bool from model, default False
+    raw_ar = parsed.get("action_required")
+    if isinstance(raw_ar, bool):
+        action_required = raw_ar
+    elif isinstance(raw_ar, str):
+        action_required = raw_ar.lower() in ("true", "1", "yes")
+    else:
+        action_required = False
 
     reason = str(parsed.get("reason") or "").strip() or "No reason provided."
+    summary = str(parsed.get("summary") or "").strip()
 
-    return TriageResult(important=important, score=score, reason=reason, category=category)
+    return TriageResult(
+        important=important, score=score, reason=reason,
+        category=category, summary=summary, action_required=action_required,
+    )
 
 
 # ---------------------------------------------------------------------------

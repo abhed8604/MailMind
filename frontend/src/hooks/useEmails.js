@@ -4,8 +4,11 @@ import { getEmails, patchEmail } from '../api/client'
 /**
  * Fetches the unified inbox with filtering / search / pagination, and exposes
  * optimistic read-state + star toggles that also fire the backend patch.
+ *
+ * ``refreshKey`` is an opaque counter that, when changed, forces a re-fetch —
+ * used to pull fresh AI summaries after a triage scan completes.
  */
-export function useEmails({ filter, q, account, page }) {
+export function useEmails({ filter, q, account, page, refreshKey }) {
   const [data, setData] = useState({ emails: [], total: 0, total_pages: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -25,7 +28,7 @@ export function useEmails({ filter, q, account, page }) {
       })
       .catch((e) => id === reqId.current && setError(e.message || String(e)))
       .finally(() => id === reqId.current && setLoading(false))
-  }, [filter, q, account, page])
+  }, [filter, q, account, page, refreshKey])
 
   const updateOne = useCallback((id, updater) => {
     setData((d) => ({

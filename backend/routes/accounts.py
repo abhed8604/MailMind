@@ -77,10 +77,17 @@ def trigger_sync(
                 raise HTTPException(404, "Account vanished during sync")
             try:
                 result = gmail_sync.sync_account(acc, initial_count=initial_count)
-                return {**result, "account": email}
             except Exception as exc:
                 log.exception("Synchronous sync failed for %s", email)
                 raise HTTPException(500, f"Sync failed: {exc}")
+        # Best-effort auto-triage so the freshly-fetched emails get summaries.
+        try:
+            from ..triage_runner import run_triage_scan
+            triage_summary = run_triage_scan(rescan=False, limit=500)
+            result = {**result, "triage": triage_summary}
+        except Exception:
+            log.exception("Auto-triage after sync failed for %s", email)
+        return {**result, "account": email}
 
     # Background — fire-and-forget with proper error handling.
     def _bg():
@@ -92,6 +99,14 @@ def trigger_sync(
                     gmail_sync.sync_account(acc, initial_count=initial_count)
                 except Exception:
                     log.exception("Background sync failed for %s", email)
+                    return
+                # Immediately triage the freshly-fetched emails so the UI can
+                # surface AI summaries + importance ratings without a manual scan.
+                try:
+                    from ..triage_runner import run_triage_scan
+                    run_triage_scan(rescan=False, limit=500)
+                except Exception:
+                    log.exception("Auto-triage after initial sync failed for %s", email)
 
     threading.Thread(target=_bg, daemon=True).start()
     return {"status": "started", "account": email}

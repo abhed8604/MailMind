@@ -80,7 +80,7 @@ def list_emails(
     rows = list(db.scalars(stmt.offset(offset).limit(PAGE_SIZE)))
 
     return {
-        "emails": [r.to_dict() for r in rows],
+        "emails": [r.to_list_dict() for r in rows],
         "page": page,
         "page_size": PAGE_SIZE,
         "total": total,

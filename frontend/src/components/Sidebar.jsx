@@ -1,98 +1,161 @@
-import { relativeTime } from '../lib/categories'
-
-const NAV = [
-  { id: 'inbox', label: 'Inbox', icon: '📥' },
-  { id: 'important', label: 'Important', icon: '⚡' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
-]
+import {
+  ScanIcon, RescanIcon, SyncIcon, InboxIcon, ImportantIcon, StarIcon, SettingsIcon,
+  LogoMark,
+} from './Icon'
 
 /**
- * Left rail: MailMind mark, primary nav, accounts list with color dots, and a
- * sync status pill at the bottom. Selecting an account filters the inbox to it.
+ * Panel 1 — slim icon sidebar (fixed width).
+ *
+ * Top:   logo mark + wordmark (rotated/stacked to fit the narrow rail)
+ * Below: 3 compact action buttons stacked vertically
+ *          · Scan Important  (amber fill)
+ *          · Rescan all      (ghost, glass border)
+ *          · Sync now        (ghost, glass border)
+ * Thin glass divider, then nav icons (Inbox / Important / Starred).
+ * Bottom: connected account avatars as colored circles with a glow ring,
+ *         and a settings icon pinned to the very bottom.
  */
 export default function Sidebar({
   view, onView, accounts, selectedAccount, onSelectAccount,
-  syncStatus, mockMode,
+  syncStatus, mockMode, scanRunning, onScan, onRescanAll, onSyncNow,
 }) {
   return (
-    <aside className="w-60 shrink-0 bg-ink-950 border-r border-ink-800/70 flex flex-col">
-      {/* Brand */}
-      <div className="px-4 py-4 flex items-center gap-2">
-        <div className="h-7 w-7 rounded-md bg-accent-amber/90 flex items-center justify-center text-ink-950 font-bold text-sm">M</div>
-        <div className="font-semibold tracking-tight text-ink-100">MailMind</div>
+    <aside
+      className="w-[62px] shrink-0 h-full flex flex-col items-center py-3 glass-subtle overflow-hidden"
+      style={{ borderRight: '0.5px solid rgba(255,255,255,0.06)' }}
+    >
+      {/* Logo */}
+      <div className="flex flex-col items-center gap-1 mb-3">
+        <LogoMark />
       </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-col items-center gap-2">
+        <ActionBtn label="Scan Important" onClick={onScan} disabled={scanRunning} variant="amber">
+          <ScanIcon width={18} height={18} />
+        </ActionBtn>
+        <ActionBtn label="Rescan all" onClick={onRescanAll} disabled={scanRunning} variant="ghost">
+          <RescanIcon width={16} height={16} />
+        </ActionBtn>
+        <ActionBtn label="Sync now" onClick={onSyncNow} disabled={scanRunning} variant="ghost">
+          <SyncIcon width={16} height={16} />
+        </ActionBtn>
+      </div>
+
+      {/* Divider */}
+      <div className="my-3 h-px w-8" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
       {/* Nav */}
-      <nav className="px-2 flex flex-col gap-0.5">
-        {NAV.map((n) => {
-          const active = view === n.id
-          return (
-            <button
-              key={n.id}
-              onClick={() => onView(n.id)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                active
-                  ? 'bg-ink-850 text-ink-100'
-                  : 'text-ink-300 hover:bg-ink-900 hover:text-ink-200'
-              }`}
-            >
-              <span className="text-[15px]">{n.icon}</span>
-              <span>{n.label}</span>
-            </button>
-          )
-        })}
+      <nav className="flex flex-col items-center gap-1">
+        <NavBtn label="Inbox" active={view === 'inbox'} onClick={() => onView('inbox')}>
+          <InboxIcon />
+        </NavBtn>
+        <NavBtn label="Important" active={view === 'important'} onClick={() => onView('important')}>
+          <ImportantIcon />
+        </NavBtn>
+        <NavBtn label="Starred" active={view === 'starred'} onClick={() => onView('starred')}>
+          <StarIcon />
+        </NavBtn>
       </nav>
 
-      {/* Accounts */}
-      <div className="mt-6 px-4 pb-1 text-[11px] uppercase tracking-wider text-ink-400">
-        Accounts
-      </div>
-      <div className="px-2 flex-1 overflow-y-auto">
-        <button
+      {/* Spacer pushes accounts + settings to the bottom */}
+      <div className="flex-1" />
+
+      {/* Account avatars */}
+      <div className="flex flex-col items-center gap-2 mb-3">
+        {/* "All accounts" selector */}
+        <AccountAvatar
+          label="All accounts"
+          active={selectedAccount == null}
           onClick={() => onSelectAccount(null)}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm ${
-            selectedAccount == null ? 'bg-ink-850 text-ink-100' : 'text-ink-300 hover:bg-ink-900'
-          }`}
-        >
-          <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-br from-accent-blue to-accent-violet" />
-          <span>All Accounts</span>
-        </button>
-        {accounts.map((a) => {
-          const active = selectedAccount === a.id
-          return (
-            <button
-              key={a.id}
-              onClick={() => onSelectAccount(a.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm ${
-                active ? 'bg-ink-850 text-ink-100' : 'text-ink-300 hover:bg-ink-900'
-              }`}
-            >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: a.color }} />
-              <span className="truncate font-mono text-[13px]">{a.email}</span>
-              {a.needs_reauth && <span className="ml-auto text-amber-400 text-xs" title="Needs re-auth">⚠</span>}
-            </button>
-          )
-        })}
-        {accounts.length === 0 && (
-          <p className="px-3 py-2 text-xs text-ink-500">No accounts yet. Add one in Settings.</p>
-        )}
+          gradient
+        />
+        {accounts.map((a) => (
+          <AccountAvatar
+            key={a.id}
+            color={a.color}
+            label={a.email}
+            active={selectedAccount === a.id}
+            needsReauth={a.needs_reauth}
+            onClick={() => onSelectAccount(a.id)}
+          >
+            {a.email.charAt(0).toUpperCase()}
+          </AccountAvatar>
+        ))}
       </div>
 
-      {/* Sync status */}
-      <div className="px-4 py-3 border-t border-ink-800/70 text-[11px] text-ink-400">
-        {syncStatus.running ? (
-          <span className="flex items-center gap-2 text-accent-blue">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-blue animate-pulse" />
-            Syncing…
-          </span>
-        ) : (
-          <span className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
-            {syncStatus.last_run ? `Synced ${relativeTime(syncStatus.last_run)}` : 'Idle'}
-          </span>
-        )}
-        {mockMode && <div className="mt-1 text-amber-400/80">Demo mode (mock data)</div>}
-      </div>
+      {/* Settings pinned to bottom */}
+      <NavBtn label="Settings" active={view === 'settings'} onClick={() => onView('settings')}>
+        <SettingsIcon />
+      </NavBtn>
     </aside>
+  )
+}
+
+/** Square icon button used for the 3 primary actions. */
+function ActionBtn({ children, label, onClick, disabled, variant }) {
+  const base = 'h-9 w-9 rounded-xl flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+  const styles = variant === 'amber'
+    ? 'text-[#0b0b12] hover:brightness-110'
+    : 'text-white/70 hover:text-white border hover:bg-white/5'
+  const bg = variant === 'amber' ? { background: '#f59e0b' } : undefined
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${styles}`}
+      style={bg}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Nav icon button — wider hit area, purple active state. */
+function NavBtn({ children, label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`h-9 w-9 rounded-xl flex items-center justify-center transition-colors ${
+        active
+          ? 'bg-white/10'
+          : 'text-white/55 hover:text-white hover:bg-white/5'
+      }`}
+      style={active ? { color: '#7c6ef9' } : undefined}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Small colored circle for a connected account, with a matching glow ring. */
+function AccountAvatar({ children, color, label, active, needsReauth, onClick, gradient }) {
+  // The glow ring uses the account's own color so it reads as a brand signal.
+  const glow = color || '#7c6ef9'
+  const bg = gradient
+    ? { background: 'linear-gradient(135deg, #7c6ef9, #1d9e75)' }
+    : { background: `${glow}33`, color: glow }
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-medium transition-transform hover:scale-110 ${
+        active ? 'ring-2 ring-white/70' : ''
+      }`}
+      style={{
+        ...bg,
+        boxShadow: `0 0 10px 1px ${glow}66, 0 0 0 1px ${glow}55`,
+      }}
+    >
+      {children || (needsReauth ? '!' : '•')}
+    </button>
   )
 }

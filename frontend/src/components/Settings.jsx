@@ -2,27 +2,40 @@ import { useEffect, useState } from 'react'
 import {
   clearLocalData, deleteAccount, getAccounts, getSettings, startOAuth,
   testTriageConnection, triggerAccountSync, updateSettings,
+  getTriageRules, updateTriageRules, switchModel,
 } from '../api/client'
 
 /**
- * Full settings surface. Most fields debounce-PUT on change; destructive or
- * long-running actions (add account, test connection, clear data) are explicit
- * buttons. Triage "test connection" is the one network call we surface inline
- * status for.
+ * Full settings surface, restyled to match the glassmorphic home page.
+ *
+ * The icon sidebar rail is always visible (rendered by App.jsx), so this
+ * component fills the area to the right of the rail. A back button in the
+ * header returns to the inbox.
+ *
+ * Most fields debounce-PUT on change; destructive or long-running actions
+ * (add account, test connection, clear data, switch model) are explicit
+ * buttons.
  */
-export default function Settings({ onToast, onSettingsChanged, onAccountsChanged }) {
+export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged }) {
   const [settings, setSettings] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [credentialsConfigured, setCredentialsConfigured] = useState(false)
   const [busy, setBusy] = useState('')
   const [conn, setConn] = useState(null)
   const [oauthRunning, setOauthRunning] = useState(false)
+  const [rules, setRules] = useState('')
+  const [rulesDirty, setRulesDirty] = useState(false)
+  const [rulesBusy, setRulesBusy] = useState(false)
+  const [pendingModel, setPendingModel] = useState('')
+  const [modelSwitching, setModelSwitching] = useState(false)
 
   async function loadAll() {
     const [s, a] = await Promise.all([getSettings(), getAccounts()])
     setSettings(s)
     setAccounts(a.accounts)
     setCredentialsConfigured(a.credentials_configured)
+    // Load triage rules in background
+    getTriageRules().then((r) => setRules(r.rules)).catch(() => {})
   }
 
   useEffect(() => { loadAll().catch((e) => onToast?.error(`Settings load failed: ${e.message}`)) }, [])
@@ -43,8 +56,6 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
     onToast?.info('Opening browser for Gmail consent…')
     try {
       const { account } = await startOAuth()
-      // The backend now fetches the initial historical batch inline.
-      // account.initial_sync has {fetched, mode, error?}.
       const syncInfo = account.initial_sync || {}
       const count = syncInfo.fetched
       const err = syncInfo.error
@@ -106,17 +117,83 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
     }
   }
 
+  async function handleSaveRules() {
+    setRulesBusy(true)
+    try {
+      await updateTriageRules(rules)
+      setRulesDirty(false)
+      onToast?.success('AI instructions saved. New scans will use updated rules.')
+    } catch (e) {
+      onToast?.error(`Save failed: ${e.message}`)
+    } finally {
+      setRulesBusy(false)
+    }
+  }
+
+  async function handleSwitchModel() {
+    const target = (pendingModel || '').trim()
+    if (!target) {
+      onToast?.error('Enter a model name first.')
+      return
+    }
+    const current = settings.ollama_model
+    if (target === current) {
+      onToast?.info('That model is already configured.')
+      return
+    }
+    if (!confirm(
+      `Switch model from "${current}" to "${target}"?\n\n` +
+      `This will DELETE "${current}" from Ollama to free disk space, then pull "${target}". ` +
+      `Pulling can take several minutes for large models.`
+    )) return
+    setModelSwitching(true)
+    onToast?.info(`Pulling "${target}" — this may take a while…`)
+    try {
+      const res = await switchModel(target)
+      setSettings((s) => ({ ...s, ollama_model: res.model }))
+      setPendingModel('')
+      onSettingsChanged?.({ ollama_model: res.model })
+      onToast?.success(`Switched to "${res.model}". Old model deleted.`)
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e.message
+      onToast?.error(`Model switch failed: ${msg}`)
+    } finally {
+      setModelSwitching(false)
+    }
+  }
+
   if (!settings) {
-    return <div className="flex-1 p-8 text-ink-400 text-sm">Loading settings…</div>
+    return (
+      <div className="flex-1 flex items-center justify-center text-timestamp text-[13px]">
+        Loading settings…
+      </div>
+    )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-ink-950">
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+    <div
+      className="flex-1 min-w-0 h-full overflow-y-auto glass-subtle"
+      style={{ borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}
+    >
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
 
-        <header>
-          <h1 className="text-xl font-semibold text-ink-100">Settings</h1>
-          <p className="text-sm text-ink-400 mt-1">Everything runs locally. No data leaves this machine.</p>
+        {/* Header with back button */}
+        <header className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            title="Back to inbox"
+            aria-label="Back to inbox"
+            className="h-8 w-8 rounded-full glass-subtle flex items-center justify-center transition-colors hover:text-white text-sender"
+            style={{ border: '0.5px solid rgba(255,255,255,0.1)' }}
+          >
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-[17px] font-medium text-primary">Settings</h1>
+            <p className="text-[12px] text-timestamp mt-0.5">Everything runs locally. No data leaves this machine.</p>
+          </div>
         </header>
 
         {/* Accounts */}
@@ -129,28 +206,29 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
           )}
           <div className="space-y-2">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 bg-ink-900 border border-ink-800 rounded-md px-3 py-2.5">
+              <div key={a.id} className="flex items-center gap-3 glass-bubble px-4 py-3">
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: a.color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[13px] text-ink-200 truncate">{a.email}</div>
-                  <div className="font-mono text-[11px] text-ink-500">
+                  <div className="font-mono text-[13px] text-sender truncate">{a.email}</div>
+                  <div className="font-mono text-[11px] text-timestamp">
                     {a.needs_reauth ? '⚠ needs re-auth' : a.last_synced_at ? `synced ${new Date(a.last_synced_at).toLocaleString()}` : 'never synced'}
                   </div>
                 </div>
                 <button
                   onClick={() => handleRemove(a.id, a.email)}
-                  className="text-[12px] text-ink-400 hover:text-red-300 px-2 py-1"
+                  className="text-[12px] text-timestamp hover:text-red-300 px-2 py-1 transition-colors"
                 >
                   Remove
                 </button>
               </div>
             ))}
-            {accounts.length === 0 && <p className="text-sm text-ink-500">No accounts yet.</p>}
+            {accounts.length === 0 && <p className="text-[13px] text-timestamp">No accounts yet.</p>}
           </div>
           <button
             onClick={handleAddAccount}
             disabled={!credentialsConfigured || oauthRunning}
-            className="mt-3 px-3 py-2 rounded-md text-sm bg-accent-amber text-ink-950 font-medium hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ background: '#f59e0b', color: '#0b0b12' }}
           >
             {oauthRunning ? 'Waiting for consent…' : '+ Add Gmail Account'}
           </button>
@@ -178,17 +256,39 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
             <input value={settings.ollama_model} onChange={(e) => put({ ollama_model: e.target.value })}
               placeholder="gemma3:4b" className="input font-mono" />
           </Field>
+          {/* Switch model: delete the current model and pull a new one */}
+          <div className="glass-subtle rounded-xl p-3.5 space-y-2.5">
+            <div className="text-[12px] text-subject">
+              Switch model (deletes <span className="font-mono text-sender">{settings.ollama_model || 'current'}</span> and pulls a new one)
+            </div>
+            <input
+              value={pendingModel}
+              onChange={(e) => setPendingModel(e.target.value)}
+              placeholder="e.g. gemma3:4b, llama3.2:3b, hf.co/…"
+              className="input font-mono"
+              disabled={modelSwitching}
+            />
+            <button
+              onClick={handleSwitchModel}
+              disabled={modelSwitching || !pendingModel.trim()}
+              className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: '#f59e0b', color: '#0b0b12' }}
+            >
+              {modelSwitching ? 'Pulling… (this can take minutes)' : 'Delete & Pull New Model'}
+            </button>
+          </div>
           <button onClick={handleTestConnection} disabled={busy === 'conn'}
-            className="px-3 py-2 rounded-md text-sm border border-ink-700 text-ink-200 hover:bg-ink-850 disabled:opacity-40">
+            className="px-3.5 py-2 rounded-full text-[13px] glass-subtle text-sender hover:text-white transition-colors disabled:opacity-40"
+            style={{ border: '0.5px solid rgba(255,255,255,0.1)' }}>
             {busy === 'conn' ? 'Testing…' : 'Test Connection'}
           </button>
           {conn && (
-            <div className={`mt-2 text-[13px] ${conn.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+            <div className={`mt-1 text-[13px] ${conn.ok ? 'text-emerald-300' : 'text-red-300'}`}>
               {conn.ok
                 ? `Connected. ${conn.models.length} model(s) available${conn.model_available ? '' : ` — but "${conn.configured_model}" is not one of them. Run: ollama pull ${conn.configured_model}`}.`
                 : `Unreachable: ${conn.error}`}
               {conn.ok && conn.models.length > 0 && (
-                <div className="mt-1 font-mono text-[11px] text-ink-400">{conn.models.join(' · ')}</div>
+                <div className="mt-1 font-mono text-[11px] text-timestamp">{conn.models.join(' · ')}</div>
               )}
             </div>
           )}
@@ -201,25 +301,59 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
           <Field label={`Importance threshold (score ≥ ${settings.importance_threshold} shown in Important)`}>
             <input type="range" min={0} max={10} value={settings.importance_threshold}
               onChange={(e) => put({ importance_threshold: Number(e.target.value) })}
-              className="w-full accent-amber-500" />
+              className="w-full" style={{ accentColor: '#f59e0b' }} />
           </Field>
         </Section>
 
-        {/* Appearance + demo */}
-        <Section title="Appearance & Data">
-          <Toggle label="Dark mode" checked={settings.dark_mode} onChange={(v) => put({ dark_mode: v })} />
+        {/* AI Instructions */}
+        <Section title="AI Instructions" subtitle="Custom rules sent to the LLM alongside each email. Markdown supported.">
+          <textarea
+            value={rules}
+            onChange={(e) => { setRules(e.target.value); setRulesDirty(true) }}
+            rows={12}
+            className="input font-mono text-[12px] leading-relaxed resize-y"
+            placeholder="Loading…"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveRules}
+              disabled={!rulesDirty || rulesBusy}
+              className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: '#f59e0b', color: '#0b0b12' }}
+            >
+              {rulesBusy ? 'Saving…' : 'Save Rules'}
+            </button>
+            {rulesDirty && <span className="text-[11px] text-timestamp">Unsaved changes</span>}
+          </div>
+        </Section>
+
+        {/* Data */}
+        <Section title="Data Management">
           <Toggle label="Demo mode (seed mock emails)" checked={settings.mock_mode} onChange={(v) => put({ mock_mode: v })} />
           <button onClick={handleClearData}
-            className="mt-2 px-3 py-2 rounded-md text-sm border border-red-500/40 text-red-300 hover:bg-red-500/10">
+            className="px-3.5 py-2 rounded-full text-[13px] transition-colors"
+            style={{ border: '0.5px solid rgba(248,113,113,0.4)', color: '#fca5a5' }}>
             Clear Local Data
           </button>
         </Section>
       </div>
 
-      {/* Tailwind class shorthands injected once. */}
+      {/* Glass input style — translucent surface refracting the ambient orbs. */}
       <style>{`
-        .input { width: 100%; background: #1a1a1a; border: 1px solid #262626; border-radius: 6px; padding: 8px 10px; font-size: 13px; color: #d4d4d4; }
-        .input:focus { outline: none; border-color: #4b4b4b; }
+        .input {
+          width: 100%;
+          background: rgba(255,255,255,0.04);
+          backdrop-filter: blur(12px);
+          border: 0.5px solid rgba(255,255,255,0.1);
+          border-radius: 10px;
+          padding: 9px 12px;
+          font-size: 13px;
+          color: rgba(255,255,255,0.88);
+          transition: border-color 0.15s ease;
+        }
+        .input::placeholder { color: rgba(255,255,255,0.3); }
+        .input:focus { outline: none; border-color: #7c6ef9; }
+        .input:disabled { opacity: 0.5; }
       `}</style>
     </div>
   )
@@ -227,10 +361,12 @@ export default function Settings({ onToast, onSettingsChanged, onAccountsChanged
 
 function Section({ title, subtitle, children }) {
   return (
-    <section>
-      <h2 className="text-sm font-semibold text-ink-100">{title}</h2>
-      {subtitle && <p className="text-[12px] text-ink-500 mt-0.5 mb-3">{subtitle}</p>}
-      <div className="space-y-3 mt-3">{children}</div>
+    <section className="glass-subtle rounded-2xl px-5 py-4 space-y-3">
+      <div>
+        <h2 className="text-[14px] font-medium text-primary">{title}</h2>
+        {subtitle && <p className="text-[12px] text-timestamp mt-0.5">{subtitle}</p>}
+      </div>
+      {children}
     </section>
   )
 }
@@ -238,7 +374,7 @@ function Section({ title, subtitle, children }) {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-[12px] text-ink-400 mb-1.5">{label}</span>
+      <span className="block text-[12px] text-subject mb-1.5">{label}</span>
       {children}
     </label>
   )
@@ -247,29 +383,31 @@ function Field({ label, children }) {
 function Select({ value, onChange, options }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="input">
-      {options.map((o) => <option key={o.value} value={o.value} className="bg-ink-900">{o.label}</option>)}
+      {options.map((o) => <option key={o.value} value={o.value} style={{ background: '#1a1a1a' }}>{o.label}</option>)}
     </select>
   )
 }
 
 function Toggle({ label, checked, onChange }) {
   return (
-    <label className="flex items-center justify-between gap-4 cursor-pointer">
-      <span className="text-sm text-ink-300">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!checked)}
-        className={`relative h-5 w-9 rounded-full transition-colors ${checked ? 'bg-accent-amber' : 'bg-ink-700'}`}
+    <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => onChange(!checked)}>
+      <span className="text-[13px] text-sender">{label}</span>
+      <span
+        className="relative h-5 w-9 rounded-full transition-colors block pointer-events-none"
+        style={{ background: checked ? '#f59e0b' : 'rgba(255,255,255,0.1)' }}
       >
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
-      </button>
-    </label>
+        <span
+          className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform block"
+          style={{ transform: checked ? 'translateX(18px)' : 'translateX(2px)' }}
+        />
+      </span>
+    </div>
   )
 }
 
 function Note({ kind = 'info', children }) {
   const styles = kind === 'warn'
-    ? 'border-amber-500/40 bg-amber-500/5 text-amber-200'
-    : 'border-ink-700 bg-ink-900 text-ink-300'
-  return <div className={`text-[13px] border rounded-md px-3 py-2 ${styles}`}>{children}</div>
+    ? { border: '0.5px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.06)', color: '#fcd34d' }
+    : { border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.55)' }
+  return <div className="text-[13px] rounded-lg px-3 py-2" style={styles}>{children}</div>
 }

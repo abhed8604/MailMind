@@ -7,16 +7,18 @@ reschedulable at runtime when the user changes the sync interval in Settings.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from .database import Account, SessionLocal, get_all_settings, get_setting, set_setting
+from .database import Account, Email, SessionLocal, get_all_settings, get_setting, set_setting
 
 log = logging.getLogger("mailmind.scheduler")
 
 SYNC_JOB_ID = "mailmind-sync"
+CLEANUP_JOB_ID = "mailmind-cleanup"
+EMAIL_RETENTION_DAYS = 30
 _STATUS: dict = {"running": False, "last_run": None, "last_result": None}
 
 
@@ -62,15 +64,48 @@ def run_sync_job() -> None:
             auto_scan = get_setting(db, "auto_scan")
         if auto_scan:
             try:
-                triage_summary = run_triage_scan(rescan=False, limit=50)
+                triage_summary = run_triage_scan(rescan=False, limit=500)
                 results.append({"triage": triage_summary})
             except Exception as exc:  # pragma: no cover - triage is best-effort
                 log.warning("auto-triage failed: %s", exc)
+
+        # Purge emails older than the retention window (best-effort).
+        try:
+            removed = cleanup_old_emails()
+            if removed:
+                results.append({"cleanup": {"removed": removed}})
+        except Exception as exc:  # pragma: no cover
+            log.warning("email cleanup failed: %s", exc)
 
         _set_status(running=False, last_result=results)
     except Exception as exc:  # pragma: no cover
         log.exception("Scheduled sync failed")
         _set_status(running=False, last_result={"error": str(exc)})
+
+
+def cleanup_old_emails() -> int:
+    """Delete emails older than ``EMAIL_RETENTION_DAYS``.
+
+    Returns the number of rows removed. Summaries, ratings, and metadata for
+    those emails are deleted along with the body. Starred emails are kept
+    regardless of age so the user doesn't lose something they flagged.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=EMAIL_RETENTION_DAYS)
+    with SessionLocal() as db:
+        stale = (
+            db.query(Email)
+            .filter(Email.date.isnot(None))
+            .filter(Email.date < cutoff)
+            .filter(Email.is_starred.is_(False))
+            .all()
+        )
+        if not stale:
+            return 0
+        for row in stale:
+            db.delete(row)
+        db.commit()
+        log.info("cleanup: removed %d email(s) older than %d days.", len(stale), EMAIL_RETENTION_DAYS)
+        return len(stale)
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +121,19 @@ def start_scheduler() -> None:
     _scheduler = BackgroundScheduler(timezone="UTC")
     _scheduler.start()
     reschedule()
+
+    # Daily purge of emails older than the retention window.
+    if _scheduler.get_job(CLEANUP_JOB_ID) is None:
+        _scheduler.add_job(
+            cleanup_old_emails,
+            trigger=IntervalTrigger(hours=24),
+            id=CLEANUP_JOB_ID,
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
+        log.info("Scheduled email cleanup every 24h (retention: %d days).", EMAIL_RETENTION_DAYS)
+
     log.info("Scheduler started.")
 
 

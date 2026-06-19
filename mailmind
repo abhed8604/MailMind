@@ -54,6 +54,30 @@ fi
 cleanup() { echo; echo "→ Stopping MailMind…"; kill 0 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
+# ---- preflight: Ollama ----------------------------------------------------
+# Auto-start the local LLM so triage/summaries work out of the box. If Ollama
+# is already running (or not installed), we continue either way.
+OLLAMA_URL="http://localhost:11434"
+if curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+  echo "→ Ollama already running."
+elif command -v ollama >/dev/null 2>&1; then
+  echo "→ Starting Ollama…"
+  ollama serve >/dev/null 2>&1 &
+  OLLAMA_PID=$!
+  # Wait up to 15s for the API to come up.
+  for i in $(seq 1 15); do
+    if curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+      echo "✓ Ollama ready."
+      break
+    fi
+    sleep 1
+    [[ $i -eq 15 ]] && echo "→ Ollama slow to start — triage features may be delayed."
+  done
+else
+  echo "→ Ollama not found — triage features will be unavailable."
+  echo "  Install from https://ollama.com to enable AI summaries & ratings."
+fi
+
 if [[ "$DEV_MODE" == true ]]; then
   echo "→ [dev mode] Starting backend on :8000 and Vite on :5173…"
   backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &

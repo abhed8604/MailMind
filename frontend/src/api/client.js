@@ -56,6 +56,18 @@ export const getScanStatus = () =>
 export const rescanEmail = (id) =>
   api.post(`/triage/email/${id}`).then((r) => r.data)
 
+export const cancelScan = () =>
+  api.post('/triage/cancel').then((r) => r.data)
+
+export const getTriageRules = () =>
+  api.get('/triage/rules').then((r) => r.data)
+
+export const updateTriageRules = (rules) =>
+  api.put('/triage/rules', { rules }).then((r) => r.data)
+
+export const switchModel = (model) =>
+  api.post('/triage/model', { model }, { timeout: 1800000 }).then((r) => r.data)
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------

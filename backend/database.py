@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,9 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    inspect,
     select,
+    text,
 )
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -115,8 +118,10 @@ class Email(Base):
     importance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     importance_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    action_required: Mapped[bool] = mapped_column(Boolean, default=False)
     scanned_at: Mapped[_dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scan_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     synced_at: Mapped[_dt.datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
@@ -140,8 +145,45 @@ class Email(Base):
             "importance_score": self.importance_score,
             "importance_reason": self.importance_reason,
             "category": self.category,
+            "action_required": self.action_required,
             "scanned_at": self.scanned_at.isoformat() if self.scanned_at else None,
             "scan_model": self.scan_model,
+            "ai_summary": self.ai_summary,
+            "synced_at": self.synced_at.isoformat() if self.synced_at else None,
+        }
+
+    def to_list_dict(self) -> dict[str, Any]:
+        """Lightweight shape for the inbox list endpoint.
+
+        Omits the heavy ``body_html`` / ``body_text`` fields (which can each be
+        tens of KB and are only needed when an email is opened) and adds a short
+        ``preview`` derived from the body — enough for a 2–4 line row summary.
+        Everything else mirrors :meth:`to_dict`.
+        """
+        body = (self.body_text or "").strip()
+        preview = body[:400] if body else (self.snippet or "")
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "gmail_message_id": self.gmail_message_id,
+            "thread_id": self.thread_id,
+            "sender_name": self.sender_name,
+            "sender_email": self.sender_email,
+            "subject": self.subject,
+            "snippet": self.snippet,
+            "preview": preview,
+            "date": self.date.isoformat() if self.date else None,
+            "is_read": self.is_read,
+            "is_starred": self.is_starred,
+            "labels": json.loads(self.labels) if self.labels else [],
+            "important": self.important,
+            "importance_score": self.importance_score,
+            "importance_reason": self.importance_reason,
+            "category": self.category,
+            "action_required": self.action_required,
+            "scanned_at": self.scanned_at.isoformat() if self.scanned_at else None,
+            "scan_model": self.scan_model,
+            "ai_summary": self.ai_summary,
             "synced_at": self.synced_at.isoformat() if self.synced_at else None,
         }
 
@@ -167,7 +209,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "ollama_base_url": "http://localhost:11434",
     "ollama_model": "hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL",
     "auto_scan": True,
-    "importance_threshold": 6,
+    "importance_threshold": 7,
     "mock_mode": True,
     "dark_mode": True,
 }
@@ -220,5 +262,23 @@ def set_setting(db: Session, key: str, value: Any) -> Any:
 
 
 def init_db() -> None:
-    """Create tables (idempotent)."""
+    """Create tables (idempotent) and run lightweight migrations."""
     Base.metadata.create_all(bind=engine)
+
+    # Lightweight migration: add ai_summary column if missing (existing DBs).
+    _log = logging.getLogger("mailmind.db")
+    try:
+        insp = inspect(engine)
+        email_cols = {c["name"] for c in insp.get_columns("emails")}
+        if "ai_summary" not in email_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE emails ADD COLUMN ai_summary TEXT"))
+            _log.info("Migration: added ai_summary column to emails table.")
+        if "action_required" not in email_cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE emails ADD COLUMN action_required BOOLEAN DEFAULT 0")
+                )
+            _log.info("Migration: added action_required column to emails table.")
+    except Exception as exc:
+        _log.warning("Migration check failed (non-fatal): %s", exc)

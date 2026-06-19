@@ -1,16 +1,33 @@
+# MailMind backend dependencies.
+#
 # Pinned loosely so pip can resolve Python-3.14-compatible wheels.
 # (cp314 wheels for pydantic-core / cryptography only exist in recent releases.)
+# Versions below are the floor we test against; any newer compatible release works.
+
+# --- Web framework -------------------------------------------------------
 fastapi>=0.115
-uvicorn[standard]>=0.34
-sqlalchemy>=2.0.36
-google-auth-oauthlib>=1.2.1
-google-api-python-client>=2.156
-google-auth-httplib2>=0.2.0
-apscheduler>=3.11
-cryptography>=44
-keyring>=25.6
-httpx>=0.28
-python-dotenv>=1.0
-tenacity>=9.0
-pydantic>=2.11
+uvicorn[standard]>=0.34          # ASGI server; serves API + built SPA on :8000
+pydantic>=2.11                   # request/response models + validation
 pydantic-settings>=2.7
+
+# --- Database ------------------------------------------------------------
+sqlalchemy>=2.0.36               # ORM over the SQLite store at ~/.mailmind/mailmind.db
+
+# --- Gmail (OAuth2 + API) -----------------------------------------------
+google-auth-oauthlib>=1.2.1      # Desktop-app OAuth2 flow
+google-api-python-client>=2.156  # Gmail API client
+google-auth-httplib2>=0.2.0      # HTTP transport for the google client
+
+# --- Scheduler -----------------------------------------------------------
+apscheduler>=3.11                # background sync + email-cleanup jobs
+
+# --- Security ------------------------------------------------------------
+cryptography>=44                 # Fernet encryption of OAuth tokens at rest
+keyring>=25.6                    # OS keyring for the Fernet key (master.key fallback)
+
+# --- Networking ----------------------------------------------------------
+httpx>=0.28                      # talking to the local Ollama HTTP API
+tenacity>=9.0                    # retry/backoff for Gmail + Ollama calls
+
+# --- Config --------------------------------------------------------------
+python-dotenv>=1.0               # optional .env loading

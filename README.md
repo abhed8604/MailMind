@@ -14,9 +14,13 @@ touches your machine and Gmail's own API.
 - **Multi-account unified inbox** — every connected Gmail account in one
   chronological feed, each email tagged with a color-coded account dot.
 - **Local LLM triage** — each email is classified by a local model
-  (`gemma3:4b` by default) into `important` + a category
-  (`action_required`, `deadline`, `financial`, `personal`, `newsletter`,
-  `spam`, `other`), with a 0–10 score and a one-line reason.
+  (`hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL` by default) into
+  `important` + a category (`action_required`, `deadline`, `financial`,
+  `personal`, `newsletter`, `spam`, `other`), with a 0–10 score and a one-line
+  reason.
+- **Custom triage rules** — write your own importance rules in plain Markdown
+  (editable from Settings). They're prepended to the triage prompt so the model
+  applies your criteria before classifying each email.
 - **Incremental sync** — first connect fetches your last N emails; afterwards a
   background job uses Gmail's `historyId` to pull only what changed every few
   minutes.
@@ -30,8 +34,10 @@ touches your machine and Gmail's own API.
 - **Demo mode** — seed the UI with ~30 realistic mock emails so you can explore
   it before connecting real accounts or pulling a model (auto-disables once you
   connect a real account).
-- **Dark-first UI** — near-black surfaces, monospace metadata, amber accents for
-  important mail, skeleton loaders, toast notifications.
+- **Liquid-glass UI** — a three-panel resizable shell (rail / list / reader)
+  with a glassmorphic dark theme: translucent surfaces that refract ambient
+  color orbs, hover/selected row effects, a floating scan-progress bar with
+  cancel, skeleton loaders, and toast notifications.
 
 ---
 
@@ -141,6 +147,7 @@ mailmind/
 │   ├── scheduler.py         # APScheduler background sync
 │   ├── llm_triage.py        # Ollama client + prompt + JSON parsing
 │   ├── triage_runner.py     # DB <-> LLM bridge (batch scans)
+│   ├── triage_rules.py      # User-editable markdown triage rules
 │   ├── mock_data.py         # Demo-mode seed data
 │   ├── smoke_test.py        # Live triage pipeline test
 │   └── routes/
@@ -150,24 +157,29 @@ mailmind/
 │       ├── triage.py        # /triage scan/rescan/connection
 │       └── settings.py      # /settings get/put + clear-data
 ├── frontend/
+│   ├── public/favicon.svg   # MailMind logo (envelope + AI spark)
 │   └── src/
-│       ├── App.jsx          # Shell, routing, triage toolbar
-│       ├── components/      # Sidebar, EmailList/Card/Reader, Settings, Toast…
+│       ├── App.jsx          # Shell, routing, triage orchestration
+│       ├── index.css        # Glassmorphic theme primitives + effects
+│       ├── components/      # Sidebar, EmailList/Card/Reader, Settings,
+│       │                    # ScanProgressBar, Icon, SearchBar, Toast…
 │       ├── hooks/           # useEmails, useSync
 │       ├── api/client.js    # Axios wrapper for every endpoint
-│       └── lib/categories.js# category/score/time helpers
-├── start.sh                 # One-command launcher
+│       └── lib/             # categories.js, company.js (sender→brand)
+├── start.sh                 # Dev launcher (backend :8000 + Vite :5173)
+├── mailmind                 # Single-command launcher (build + serve on :8000)
 ├── requirements.txt
 └── README.md
 ```
 
 At runtime, MailMind creates `~/.mailmind/` containing:
 
-| File             | Contents                                              |
-|------------------|-------------------------------------------------------|
-| `mailmind.db`    | SQLite — emails, accounts, settings.                  |
-| `accounts.json`  | Fernet-encrypted OAuth tokens (one blob per account). |
-| `master.key`     | **Only if no OS keyring is available** — the fallback Fernet key (chmod 600). |
+| File               | Contents                                              |
+|--------------------|-------------------------------------------------------|
+| `mailmind.db`      | SQLite — emails, accounts, settings.                  |
+| `accounts.json`    | Fernet-encrypted OAuth tokens (one blob per account). |
+| `triage_rules.md`  | Your custom importance rules (editable from Settings).|
+| `master.key`       | **Only if no OS keyring is available** — the fallback Fernet key (chmod 600). |
 
 ---
 
@@ -182,7 +194,7 @@ All config lives in the SQLite `settings` table and is editable from the UI:
 | `ollama_base_url`      | `http://localhost:11434` | Ollama HTTP endpoint.                          |
 | `ollama_model`         | `hf.co/unsloth/Qwen3-4B-Instruct-2507-GGUF:UD-Q4_K_XL` | Model used for triage. |
 | `auto_scan`            | `true`                   | Auto-triage new emails after each sync.        |
-| `importance_threshold` | `6`                      | Minimum score to appear in Important.          |
+| `importance_threshold` | `7`                      | Minimum score to appear in Important.          |
 | `mock_mode`            | `true`                   | Auto-disabled once a real account is connected. |
 | `dark_mode`            | `true`                   | Dark vs light theme.                           |
 
@@ -190,9 +202,14 @@ All config lives in the SQLite `settings` table and is editable from the UI:
 
 ## How triage works
 
-For each unscored email, MailMind sends a structured prompt to Ollama:
+For each unscored email, MailMind sends a structured prompt to Ollama. If you've
+written **custom triage rules** (in Settings, stored at
+`~/.mailmind/triage_rules.md`), they are prepended to the prompt so the model
+applies your criteria first:
 
 ```
+{your custom rules, if any}
+
 You are an email importance classifier. Analyze this email and respond ONLY with valid JSON.
 
 Email:
@@ -209,9 +226,28 @@ The parser is defensive: it strips ```` ```json ```` fences, falls back to a
 regex `{...}` extraction, and clamps/sanitizes every field — so an occasionally
 chatty model never breaks the pipeline. Results are stored on the email row.
 
+### Custom triage rules
+
+Open **Settings → Triage Rules** to write plain-Markdown instructions that shape
+what the model considers important. For example:
+
+```markdown
+# My priorities
+
+- Emails from my manager or direct reports are always important.
+- Pull-request review requests are important; GitHub notifications are not.
+- Receipts and invoices should be tagged "financial".
+- Ignore newsletters unless they mention "invoice" or "payment".
+```
+
+These are injected verbatim at the top of every triage prompt. They persist at
+`~/.mailmind/triage_rules.md` and survive restarts.
+
 If Ollama is **not running**, triage features disable gracefully: the "Scan"
 button reports the outage via toast, the Test Connection panel says so
-explicitly, and the rest of the app keeps working.
+explicitly, and the rest of the app keeps working. While a scan runs, a floating
+progress bar appears at the bottom of the screen showing live `scanned/total`
+counts with a **Cancel** button to stop after the current batch.
 
 ---
 

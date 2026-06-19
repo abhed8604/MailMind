@@ -41,6 +41,23 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ---- preflight: Ollama ----------------------------------------------------
+# Auto-start the local LLM so triage/summaries work out of the box.
+OLLAMA_URL="http://localhost:11434"
+if curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+  echo "→ Ollama already running."
+elif command -v ollama >/dev/null 2>&1; then
+  echo "→ Starting Ollama …"
+  ollama serve >/dev/null 2>&1 &
+  for i in $(seq 1 15); do
+    curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1 && { echo "✓ Ollama ready."; break; }
+    sleep 1
+    [[ $i -eq 15 ]] && echo "→ Ollama slow to start — triage features may be delayed."
+  done
+else
+  echo "→ Ollama not found — triage features will be unavailable."
+fi
+
 echo "→ Starting backend on :8000 …"
 backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
 BACKEND_PID=$!

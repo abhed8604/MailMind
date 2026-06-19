@@ -2,11 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------------------------------------------------------------------------
-   Base typography / scrollbars. Dark-first; light mode handled via .paper on
-   the root container rather than flipping the body, so we keep one stable
-   default.
---------------------------------------------------------------------------- */
+/* ===========================================================================
+   MailMind — glassmorphic dark theme
+   Background: #0b0b12 with three blurred ambient color orbs behind everything.
+   All surfaces are translucent glass (backdrop-filter blur+saturate) refracting
+   those orbs. Text is white at decreasing opacities for hierarchy.
+   =========================================================================== */
+
 html,
 body,
 #root {
@@ -14,52 +16,259 @@ body,
 }
 
 body {
-  @apply bg-ink-950 text-ink-200 font-sans antialiased;
   margin: 0;
+  background: #0b0b12;
+  color: rgba(255, 255, 255, 0.88);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden; /* the app shell manages its own scroll regions */
 }
 
-/* Monospace for email metadata is applied via the .font-mono utility. */
+/* --- Text hierarchy (white at decreasing opacity) ----------------------- */
+.text-primary   { color: rgba(255, 255, 255, 0.88); }
+.text-sender    { color: rgba(255, 255, 255, 0.72); }
+.text-subject   { color: rgba(255, 255, 255, 0.55); }
+.text-preview   { color: rgba(255, 255, 255, 0.30); }
+.text-timestamp { color: rgba(255, 255, 255, 0.22); }
 
-/* Thin, unobtrusive scrollbars. */
+/* --- Ambient orbs ------------------------------------------------------- */
+/* Three large blurred radial blobs that give the glass surfaces something
+   colorful to refract. Fixed-position, pointer-events:none, low opacity.   */
+.ambient-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ambient-orbs::before,
+.ambient-orbs::after,
+.ambient-orbs > .orb {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+}
+.ambient-orbs::before { /* purple */
+  width: 45vw; height: 45vw;
+  top: -10vw; left: -8vw;
+  background: radial-gradient(circle, #7c6ef9 0%, transparent 70%);
+  opacity: 0.14;
+}
+.ambient-orbs::after { /* teal */
+  width: 40vw; height: 40vw;
+  bottom: -10vw; right: 12vw;
+  background: radial-gradient(circle, #1d9e75 0%, transparent 70%);
+  opacity: 0.12;
+}
+.ambient-orbs > .orb { /* amber */
+  width: 38vw; height: 38vw;
+  top: 25vh; right: -10vw;
+  background: radial-gradient(circle, #f59e0b 0%, transparent 70%);
+  opacity: 0.10;
+}
+
+/* --- Glass surface primitive ------------------------------------------- */
+/* backdrop-filter needs a translucent background to refract the orbs.      */
+.glass {
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.06);
+}
+
+/* --- Liquid glass bubble (mail list rows) ------------------------------ */
+.glass-bubble {
+  position: relative;
+  border-radius: 18px;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+/* Specular highlight arc: top 44% of the bubble gets a soft white gradient. */
+.glass-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 44%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: 18px 18px 0 0;
+}
+
+/* Hover: lift slightly, brighten glass, glow border */
+.glass-bubble:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+.glass-bubble:hover::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, transparent 100%);
+}
+
+/* Selected: vivid purple glow, brighter specular, subtle scale */
+.glass-bubble-active {
+  background: rgba(124, 110, 249, 0.10) !important;
+  border-color: rgba(124, 110, 249, 0.4) !important;
+  box-shadow:
+    0 0 0 1px rgba(124, 110, 249, 0.3),
+    0 4px 24px rgba(124, 110, 249, 0.15),
+    0 0 40px rgba(124, 110, 249, 0.06);
+  transform: scale(1.005);
+}
+.glass-bubble-active::before {
+  background: linear-gradient(180deg, rgba(124, 110, 249, 0.12) 0%, transparent 100%) !important;
+}
+
+/* Selected + hover combined (already selected, still hovering) */
+.glass-bubble-active:hover {
+  background: rgba(124, 110, 249, 0.14) !important;
+  border-color: rgba(124, 110, 249, 0.55) !important;
+  box-shadow:
+    0 0 0 1px rgba(124, 110, 249, 0.4),
+    0 6px 28px rgba(124, 110, 249, 0.2),
+    0 0 50px rgba(124, 110, 249, 0.08);
+  transform: scale(1.008) translateY(-1px);
+}
+
+/* --- Dividers ---------------------------------------------------------- */
+.divider {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Resizable panel handles ------------------------------------------- */
+/* Thin vertical drag handles between the sidebar / list / reader panels.   */
+.resize-handle {
+  width: 3px;
+  cursor: col-resize;
+  position: relative;
+  background: transparent;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 1px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+.resize-handle:hover::after,
+.resize-handle[data-resize-handle-active]::after {
+  background: rgba(124, 110, 249, 0.5);
+}
+
+/* --- Scrollbars -------------------------------------------------------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-thumb {
-  background: #333;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* --- Rendered email body ---------------------------------------------- */
+.email-body {
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.65;
+  font-size: 14px;
+}
+.email-body a { color: #7c6ef9; text-decoration: underline; }
+.email-body p { margin: 0 0 0.85em; }
+.email-body ul, .email-body ol { margin: 0 0 0.85em 1.25em; }
+.email-body b, .email-body strong { color: rgba(255, 255, 255, 0.85); font-weight: 500; }
+.email-body img { max-width: 100%; border-radius: 8px; }
+.email-body code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
   border-radius: 4px;
 }
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
 
-/* Skeleton shimmer used by loading placeholders. */
+/* --- Skeleton shimmer -------------------------------------------------- */
 @keyframes shimmer {
-  0% { background-position: -400px 0; }
+  0%   { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #1a1a1a 25%, #242424 37%, #1a1a1a 63%);
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 37%,
+    rgba(255,255,255,0.04) 63%);
   background-size: 800px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
-/* Rendered email body should read like prose, not be constrained by app
-   typography. We scope it so Tailwind preflight doesn't strip all styling. */
-.email-body {
-  @apply text-ink-200 leading-relaxed text-[15px];
+/* --- Processing placeholder (unscanned email card) --------------------- */
+/* A darker, blurred bubble shown while the local AI is summarizing a newly
+   arrived email. The body area uses a shimmer + spinner to signal work.   */
+.glass-bubble-processing {
+  position: relative;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.015);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 0.5px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  transition: all 0.2s ease;
 }
-.email-body a { @apply text-accent-blue underline; }
-.email-body p { margin: 0 0 0.75em; }
-.email-body ul, .email-body ol { margin: 0 0 0.75em 1.25em; }
-.email-body b, .email-body strong { @apply text-ink-100 font-semibold; }
-.email-body code { @apply font-mono text-[13px] bg-ink-800 px-1 py-0.5 rounded; }
+.glass-bubble-processing:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+.glass-bubble-processing .blurred-body {
+  filter: blur(5px);
+  opacity: 0.4;
+  user-select: none;
+  pointer-events: none;
+}
 
-/* Light theme overrides when the root has the `light` class. */
-.light body { @apply bg-paper text-paper-text; }
-.light .email-body { @apply text-paper-text; }
-.light .email-body b, .light .email-body strong { @apply text-black; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #f59e0b;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* --- Reduced motion ---------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .spinner { animation: none; }
+  * { transition: none !important; animation: none !important; }
+}
+
+/* --- Selection --------------------------------------------------------- */
+::selection {
+  background: rgba(124, 110, 249, 0.35);
+  color: #fff;
+}
+
+/* --- Focus rings ------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid rgba(124, 110, 249, 0.6);
+  outline-offset: 1px;
+}
+button:focus { outline: none; }
