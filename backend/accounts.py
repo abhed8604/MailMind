@@ -41,14 +41,18 @@ SCOPES = [
 # A curated palette for account color dots. We cycle through it as accounts are
 # added so each gets a visually distinct tag in the unified inbox.
 ACCOUNT_COLORS = [
-    "#60a5fa",  # blue-400
-    "#34d399",  # emerald-400
-    "#f472b6",  # pink-400
-    "#fbbf24",  # amber-400
-    "#a78bfa",  # violet-400
-    "#22d3ee",  # cyan-400
-    "#fb7185",  # rose-400
-    "#a3e635",  # lime-400
+    "#3b82f6",  # blue-500
+    "#f97316",  # orange-500
+    "#ec4899",  # pink-500
+    "#10b981",  # emerald-500
+    "#8b5cf6",  # violet-500
+    "#14b8a6",  # teal-500
+    "#ef4444",  # red-500
+    "#eab308",  # yellow-500
+    "#6366f1",  # indigo-500
+    "#84cc16",  # lime-500
+    "#06b6d4",  # cyan-500
+    "#d946ef",  # fuchsia-500
 ]
 
 

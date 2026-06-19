@@ -175,7 +175,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
       className="flex-1 min-w-0 h-full overflow-y-auto glass-subtle"
       style={{ borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}
     >
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
         {/* Header with back button */}
         <header className="flex items-center gap-3">

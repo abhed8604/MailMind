@@ -34,15 +34,28 @@ if [[ "${1:-}" == "--build" ]]; then
 fi
 
 # ---- run both ------------------------------------------------------------
+CHILDREN=()
 cleanup() {
-  echo
-  echo "→ Stopping MailMind …"
+  echo; echo "→ Stopping MailMind…"
+  # Kill tracked children and their process groups.
+  for pid in "${CHILDREN[@]}"; do
+    kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  done
+  # Fallback: kill anything still in our process group.
   kill 0 2>/dev/null || true
+  sleep 0.5
+  # Force-kill survivors.
+  for pid in "${CHILDREN[@]}"; do
+    kill -9 "$pid" 2>/dev/null || true
+  done
 }
 trap cleanup EXIT INT TERM
 
 # ---- preflight: Ollama ----------------------------------------------------
 # Auto-start the local LLM so triage/summaries work out of the box.
+# OLLAMA_KEEP_ALIVE frees the model from RAM shortly after a scan, so a long
+# rescan doesn't keep memory pinned while idle.
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-5m}"
 OLLAMA_URL="http://localhost:11434"
 if curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
   echo "→ Ollama already running."
@@ -59,11 +72,11 @@ else
 fi
 
 echo "→ Starting backend on :8000 …"
-backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 & CHILDREN+=($!)
 BACKEND_PID=$!
 
 echo "→ Starting frontend on :5173 …"
-(cd frontend && npm run dev) &
+(cd frontend && npm run dev) & CHILDREN+=($!)
 FRONTEND_PID=$!
 
 # Give servers a moment, then open the browser if possible.

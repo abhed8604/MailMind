@@ -38,6 +38,9 @@ function MailMind() {
   // Bumped whenever a scan finishes, so the email list re-fetches to surface
   // freshly-generated AI summaries (replacing the "Analyzing…" placeholders).
   const [scanTick, setScanTick] = useState(0)
+  // Bumped whenever a background sync finishes, so the email list re-fetches to
+  // surface updated read/unread state and newly-arrived emails in real time.
+  const [syncTick, setSyncTick] = useState(0)
 
   // ---- settings + accounts bootstrap -------------------------------------
   useEffect(() => {
@@ -72,6 +75,9 @@ function MailMind() {
       } else {
         toast.info('Background sync complete.')
       }
+      // Re-fetch the list so read/unread state and new emails from Gmail
+      // show up in real time without a manual refresh.
+      setSyncTick((t) => t + 1)
     } else if (ev.type === 'error') {
       toast.error(ev.message)
     }
@@ -83,7 +89,8 @@ function MailMind() {
   const effectiveFilter = view === 'important' ? 'important'
     : view === 'starred' ? 'starred' : filter
   const { data, loading, error, toggleRead, toggleStar, markReadLocally, setData } = useEmails({
-    filter: effectiveFilter, q: debouncedQuery, account: selectedAccount, page, refreshKey: scanTick,
+    filter: effectiveFilter, q: debouncedQuery, account: selectedAccount, page,
+    refreshKey: scanTick + syncTick,
   })
 
   // Refresh the selected email object when the list updates (e.g. after toggle).

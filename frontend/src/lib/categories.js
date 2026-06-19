@@ -36,18 +36,19 @@ export function categoryTint(cat) {
 /**
  * Score → small badge style. Returns an inline-style object so it composes
  * cleanly over glass. High scores lean amber; mid scores purple (brand).
+ * Scores are on a 0–100 scale (from the LLM).
  */
 export function scoreBadgeStyle(score) {
   if (score == null) {
     return { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: '0.5px solid rgba(255,255,255,0.08)' }
   }
-  if (score >= 8) {
+  if (score >= 80) {
     return { background: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: '0.5px solid rgba(245,158,11,0.4)' }
   }
-  if (score >= 6) {
+  if (score >= 60) {
     return { background: 'rgba(124,110,249,0.18)', color: '#a78bfa', border: '0.5px solid rgba(124,110,249,0.4)' }
   }
-  if (score >= 3) {
+  if (score >= 30) {
     return { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.55)', border: '0.5px solid rgba(255,255,255,0.08)' }
   }
   return { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)', border: '0.5px solid rgba(255,255,255,0.06)' }

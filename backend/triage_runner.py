@@ -20,21 +20,46 @@ from .database import Email, SessionLocal, get_setting
 
 log = logging.getLogger("mailmind.triage_runner")
 
+# Hard cap on how many emails a single scan/rescan will touch. Keeps runs
+# predictable and bounded; never-scanned emails are prioritized within the cap.
+MAX_SCAN_LIMIT = 100
+
 
 def _pick_emails(db: Session, *, rescan: bool, limit: int | None) -> list[Email]:
-    """Return emails to triage.
+    """Return emails to triage, capped at ``MAX_SCAN_LIMIT``.
 
-    By default only emails that have never been scanned (``scanned_at IS NULL``)
-    are picked. With ``rescan=True`` all emails (in the current filter) are
-    eligible — used by the explicit "rescan everything" action.
+    Priority order within the cap:
+      1. Emails that have never been scanned (``scanned_at IS NULL``), newest first.
+      2. Remaining slots (up to the cap) filled with the latest already-scanned emails.
+
+    A normal (non-rescan) scan only considers never-scanned emails; a rescan
+    also re-triages previously-scored ones to fill the cap.
     """
-    q = select(Email)
+    cap = min(limit or MAX_SCAN_LIMIT, MAX_SCAN_LIMIT)
+
+    # Never-scanned emails first (priority), newest first.
+    never_scanned = list(db.scalars(
+        select(Email)
+        .where(Email.scanned_at.is_(None))
+        .order_by(Email.date.desc().nullslast())
+        .limit(cap)
+    ))
+
     if not rescan:
-        q = q.where(Email.scanned_at.is_(None))
-    q = q.order_by(Email.date.desc().nullslast())
-    if limit:
-        q = q.limit(limit)
-    return list(db.scalars(q))
+        return never_scanned
+
+    # Rescan: fill any remaining slots with the latest already-scanned emails.
+    remaining = cap - len(never_scanned)
+    if remaining <= 0:
+        return never_scanned
+
+    fill = list(db.scalars(
+        select(Email)
+        .where(Email.scanned_at.is_not(None))
+        .order_by(Email.date.desc().nullslast())
+        .limit(remaining)
+    ))
+    return never_scanned + fill
 
 
 def run_triage_scan(
@@ -79,9 +104,18 @@ def run_triage_scan(
             return {"scanned": 0, "important": 0, "errors": 0, "model": model,
                     "unavailable": False, "error": None, "total": 0, "cancelled": False}
 
-        # Detach into plain dicts for the model-agnostic triage module.
-        payloads = [e.to_dict() for e in emails]
-        id_map = {e.id: e for e in emails}
+        # Build lightweight payloads — only the fields the LLM prompt needs.
+        # This avoids loading body_html (the heaviest field) into RAM.
+        payloads = [
+            {
+                "id": e.id,
+                "subject": e.subject or "",
+                "sender_name": e.sender_name or "",
+                "sender_email": e.sender_email or "",
+                "body_text": (e.body_text or "")[:1500],
+            }
+            for e in emails
+        ]
 
     # Run the batch outside the DB session (each triage call is slow).
     scanned = important = errors = 0

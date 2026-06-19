@@ -192,8 +192,8 @@ def _coerce_result(parsed: dict[str, Any]) -> TriageResult:
     raw_cat = str(parsed.get("category") or "").strip()
     category = raw_cat.title() if raw_cat else "Other"
 
-    # Important: based on importance level label
-    raw_importance = str(parsed.get("importance") or "").strip().upper()
+    # Important: based on importance level label (compare case-insensitively).
+    raw_importance = str(parsed.get("importance") or "").strip().lower()
     important = raw_importance in IMPORTANT_LEVELS
 
     # Action required: bool from model, default False
@@ -219,7 +219,13 @@ def _coerce_result(parsed: dict[str, Any]) -> TriageResult:
 # ---------------------------------------------------------------------------
 def _generate(model: str, base_url: str, prompt: str,
               timeout: float = DEFAULT_TIMEOUT) -> str:
-    """Call Ollama /api/generate and return the raw model response text."""
+    """Call Ollama /api/generate and return the raw model response text.
+
+    Memory + output are capped via Ollama options to keep a long rescan from
+    exhausting RAM: ``num_ctx`` bounds the context window, ``num_predict`` caps
+    the generated tokens (reasoning models can otherwise emit very long
+    ``<think>`` traces), and ``num_thread`` keeps CPU/memory bounded.
+    """
     base = base_url.rstrip("/")
     try:
         resp = httpx.post(
@@ -228,7 +234,12 @@ def _generate(model: str, base_url: str, prompt: str,
                 "model": model,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.2},
+                "options": {
+                    "temperature": 0.2,
+                    "num_ctx": 4096,       # cap context window (RAM)
+                    "num_predict": 512,    # cap generated tokens (output length)
+                    "num_thread": 4,       # bound concurrent CPU/memory use
+                },
             },
             timeout=timeout,
         )

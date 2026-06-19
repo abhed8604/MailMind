@@ -51,12 +51,31 @@ if [[ "$BUILD_ONLY" == true ]]; then
 fi
 
 # ---- run ------------------------------------------------------------------
-cleanup() { echo; echo "→ Stopping MailMind…"; kill 0 2>/dev/null || true; }
+CHILDREN=()
+cleanup() {
+  echo; echo "→ Stopping MailMind…"
+  # Kill tracked children and their process groups.
+  for pid in "${CHILDREN[@]}"; do
+    kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  done
+  # Fallback: kill anything still in our process group.
+  kill 0 2>/dev/null || true
+  sleep 0.5
+  # Force-kill survivors.
+  for pid in "${CHILDREN[@]}"; do
+    kill -9 "$pid" 2>/dev/null || true
+  done
+}
 trap cleanup EXIT INT TERM
 
 # ---- preflight: Ollama ----------------------------------------------------
 # Auto-start the local LLM so triage/summaries work out of the box. If Ollama
 # is already running (or not installed), we continue either way.
+#
+# OLLAMA_KEEP_ALIVE bounds how long the model stays resident in RAM between
+# requests — set to a short window so a long rescan doesn't pin memory the
+# whole time, and idle RAM is freed after the scan finishes.
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:-5m}"
 OLLAMA_URL="http://localhost:11434"
 if curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
   echo "→ Ollama already running."
@@ -80,13 +99,13 @@ fi
 
 if [[ "$DEV_MODE" == true ]]; then
   echo "→ [dev mode] Starting backend on :8000 and Vite on :5173…"
-  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
-  (cd frontend && npm run dev) &
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 & CHILDREN+=($!)
+  (cd frontend && npm run dev) & CHILDREN+=($!)
   sleep 3
   URL="http://localhost:5173"
 else
   echo "→ Starting MailMind on :8000 …"
-  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 & CHILDREN+=($!)
   URL="http://localhost:8000"
 fi
 
