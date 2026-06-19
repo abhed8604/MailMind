@@ -171,3 +171,117 @@ export function hexToRgba(hex, alpha) {
   const a = Math.max(0, Math.min(1, alpha))
   return `rgba(${r},${g},${b},${a})`
 }
+
+// ---------------------------------------------------------------------------
+// Account color system.
+//
+// Five color ramps for account pills, assigned per-account consistently
+// across list rows, reading pane badges, and the sidebar:
+//
+//   Primary Gmail    → blue    (#7eaaff) — rgba(91,141,239,0.18)
+//   Secondary Gmail  → purple  (#c084fc) — rgba(168,85,247,0.18)
+//   College (.ac.in)→ green   (#4ecf8e) — rgba(78,207,142,0.15)
+//   Work / corporate → amber   (#f0a030) — rgba(240,160,48,0.15)
+//   Other / misc     → grey    (rgba(255,255,255,0.55))
+// ---------------------------------------------------------------------------
+
+// Color ramp definitions: { label, color (text), pillBg }
+const ACCOUNT_RAMPS = {
+  blue:    { label: 'blue',    color: '#7eaaff',                   pillBg: 'rgba(91,141,239,0.18)' },
+  purple:  { label: 'purple',  color: '#c084fc',                   pillBg: 'rgba(168,85,247,0.18)' },
+  green:   { label: 'green',   color: '#4ecf8e',                   pillBg: 'rgba(78,207,142,0.15)' },
+  amber:   { label: 'amber',   color: '#f0a030',                   pillBg: 'rgba(240,160,48,0.15)' },
+  grey:    { label: 'grey',    color: 'rgba(255,255,255,0.55)',   pillBg: 'rgba(255,255,255,0.10)' },
+}
+
+const COLOR_CYCLE = ['blue', 'purple', 'green', 'amber', 'grey']
+
+const FREEMAIL_DOMAINS = new Set([
+  'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'aol.com',
+  'icloud.com', 'proton.me', 'protonmail.com', 'live.com', 'msn.com',
+  'gmx.com', 'gmx.net', 'yandex.com', 'mail.com', 'zoho.com', 'fastmail.com',
+])
+
+/**
+ * Classify an email domain into one of: 'college' | 'gmail' | 'freemail' | 'custom'.
+ *   gmail.com          → 'gmail'
+ *   other freemail     → 'freemail'
+ *   .ac.in / .edu      → 'college'
+ *   everything else    → 'custom'
+ */
+function domainCategory(emailAddr) {
+  const domain = domainFromEmail(emailAddr)
+  if (!domain) return 'custom'
+  if (domain.endsWith('.ac.in') || domain.endsWith('.edu')
+      || domain.endsWith('.edu.in') || domain.endsWith('.ac.uk')) {
+    return 'college'
+  }
+  if (domain === 'gmail.com') return 'gmail'
+  if (FREEMAIL_DOMAINS.has(domain)) return 'freemail'
+  return 'custom'
+}
+
+/**
+ * Resolve an account email address to its color ramp.
+ *
+ * For sender emails (used in the reading pane badge), always returns:
+ *   gmail.com          → blue
+ *   .ac.in / .edu      → green
+ *   other freemail     → grey
+ *   custom domain      → amber
+ *
+ * Returns the ramp object { label, color, pillBg }.
+ */
+export function accountRamp(emailAddr) {
+  const cat = domainCategory(emailAddr)
+  if (cat === 'college') return ACCOUNT_RAMPS.green
+  if (cat === 'gmail')   return ACCOUNT_RAMPS.blue
+  if (cat === 'freemail') return ACCOUNT_RAMPS.grey
+  return ACCOUNT_RAMPS.amber
+}
+
+/**
+ * Build a consistent color map for a list of accounts.
+ * Returns a Map<accountId, { color, pillBg }>.
+ *
+ * Assignment rules:
+ *   @gmail.com (first/only)   → blue
+ *   @gmail.com (second+)      → purple
+ *   @*.ac.in / @*.edu         → green
+ *   corporate/custom domain    → amber
+ *   other freemail / misc      → grey
+ *   6+ accounts → cycle blue → purple → green → amber → grey → blue…
+ */
+export function buildAccountColorMap(accounts) {
+  const map = new Map()
+  let gmailIndex = 0
+  const usedColors = new Set()
+
+  for (const acct of accounts) {
+    const cat = domainCategory(acct.email)
+
+    let rampKey
+    if (cat === 'college') {
+      rampKey = 'green'
+    } else if (cat === 'gmail') {
+      rampKey = gmailIndex === 0 ? 'blue' : 'purple'
+      gmailIndex++
+    } else if (cat === 'freemail') {
+      rampKey = 'grey'
+    } else {
+      rampKey = 'amber'
+    }
+
+    // If this color was already taken (e.g. two college accounts), cycle
+    if (usedColors.has(rampKey)) {
+      for (const c of COLOR_CYCLE) {
+        if (!usedColors.has(c)) { rampKey = c; break }
+      }
+    }
+
+    usedColors.add(rampKey)
+    map.set(acct.id, ACCOUNT_RAMPS[rampKey])
+  }
+
+  return map
+}

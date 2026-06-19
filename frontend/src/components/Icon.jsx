@@ -180,3 +180,24 @@ export function DotIcon(props) {
     </svg>
   )
 }
+
+/** Envelope — primary "mail / inbox" mark. */
+export function MailIcon(props) {
+  return (
+    <svg {...base} width="20" height="20" {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </svg>
+  )
+}
+
+/** Download — used for fetching / exporting mail. */
+export function DownloadIcon(props) {
+  return (
+    <svg {...base} width="20" height="20" {...props}>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 19h14" />
+    </svg>
+  )
+}

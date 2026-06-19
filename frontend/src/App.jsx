@@ -1,26 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Panel, Group, Separator } from 'react-resizable-panels'
 import Sidebar from './components/Sidebar'
 import EmailList from './components/EmailList'
 import EmailReader from './components/EmailReader'
 import Settings from './components/Settings'
-import ScanProgressBar from './components/ScanProgressBar'
 import { ToastProvider, useToast } from './components/Toast'
 import { useEmails } from './hooks/useEmails'
 import { useSync } from './hooks/useSync'
+import { useResizable } from './hooks/useResizable'
 import { getAccounts, getEmail, getSettings, patchEmail, startScan, getScanStatus, cancelScan } from './api/client'
+import { buildAccountColorMap } from './lib/company'
 
 /**
- * 3-panel glassmorphic shell (resizable):
- *   [ icon rail ][ flexible mail list ][ reader ]
- * Ambient color orbs sit behind everything (fixed, in index.css) so the glass
- * surfaces have something to refract.
+ * 3-panel flat dark shell (fixed widths):
+ *   [ 48px sidebar ][ 272px list ][ flex:1 reader ]
+ * No resizable panels — widths are fixed per the design spec.
  */
 function MailMind() {
   const toast = useToast()
   const [view, setView] = useState('inbox')        // inbox | important | starred | settings
   const [accounts, setAccounts] = useState([])
   const [settings, setSettings] = useState({ dark_mode: true, mock_mode: true })
+
+  // AMOLED mode — persisted to localStorage
+  const [amoled, setAmoled] = useState(() => {
+    try { return localStorage.getItem('amoled_mode') === 'true' } catch { return false }
+  })
+  const handleAmoledChange = useCallback((v) => {
+    setAmoled(v)
+    try { localStorage.setItem('amoled_mode', String(v)) } catch { /* ignore */ }
+  }, [])
 
   // Inbox state
   const [filter, setFilter] = useState('all')
@@ -35,11 +43,7 @@ function MailMind() {
   const [scanRunning, setScanRunning] = useState(false)
   const [scanProgress, setScanProgress] = useState({ scanned: 0, total: 0 })
   const scanTimer = useRef(null)
-  // Bumped whenever a scan finishes, so the email list re-fetches to surface
-  // freshly-generated AI summaries (replacing the "Analyzing…" placeholders).
   const [scanTick, setScanTick] = useState(0)
-  // Bumped whenever a background sync finishes, so the email list re-fetches to
-  // surface updated read/unread state and newly-arrived emails in real time.
   const [syncTick, setSyncTick] = useState(0)
 
   // ---- settings + accounts bootstrap -------------------------------------
@@ -52,19 +56,15 @@ function MailMind() {
     getAccounts().then((a) => setAccounts(a.accounts)).catch(() => {})
   }, [])
 
-  // Debounce search so we don't fire a request per keystroke.
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedQuery(query.trim()); setPage(1) }, 250)
     return () => clearTimeout(t)
   }, [query])
 
-  // Sync the filter with the active nav view.
-  useEffect(() => {
-    if (view === 'important') setFilter('important')
-    else if (view === 'starred') setFilter('starred')
-    else if (view === 'inbox' && (filter === 'important' || filter === 'starred')) setFilter('all')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view])
+  // Reset to page 1 whenever the sidebar view changes. The `filter` (tab)
+  // is kept independent — switching views never resets the active tab.
+  useEffect(() => { setPage(1) }, [view])
 
   // ---- toast bridge for sync events --------------------------------------
   const handleSyncEvent = useCallback((ev) => {
@@ -75,8 +75,6 @@ function MailMind() {
       } else {
         toast.info('Background sync complete.')
       }
-      // Re-fetch the list so read/unread state and new emails from Gmail
-      // show up in real time without a manual refresh.
       setSyncTick((t) => t + 1)
     } else if (ev.type === 'error') {
       toast.error(ev.message)
@@ -86,14 +84,33 @@ function MailMind() {
   const { status: syncStatus, manualRunning, syncNow } = useSync({ onEvent: handleSyncEvent })
 
   // ---- emails hook -------------------------------------------------------
-  const effectiveFilter = view === 'important' ? 'important'
-    : view === 'starred' ? 'starred' : filter
+  // The API filter follows the sidebar VIEW (important/starred show those
+  // scopes; inbox returns everything and the tab filters client-side). The
+  // tab `filter` is layered on top via `visibleData` below.
+  const apiFilter = view === 'important' ? 'important'
+    : view === 'starred' ? 'starred'
+    : filter
   const { data, loading, error, toggleRead, toggleStar, markReadLocally, setData } = useEmails({
-    filter: effectiveFilter, q: debouncedQuery, account: selectedAccount, page,
+    filter: apiFilter, q: debouncedQuery, account: selectedAccount, page,
     refreshKey: scanTick + syncTick,
   })
 
-  // Refresh the selected email object when the list updates (e.g. after toggle).
+  // Layer the active TAB on top of the sidebar VIEW's results. In inbox the
+  // API already applies the tab; in important/starred the API returns the
+  // whole view and we narrow further by tab here.
+  const visibleData = useMemo(() => {
+    if (view === 'inbox') return data
+    if (filter === 'all' || filter === view) return data
+    const emails = data.emails.filter((e) => {
+      if (filter === 'unread') return !e.is_read
+      if (filter === 'important') return e.important
+      if (filter === 'starred') return e.is_starred
+      return true
+    })
+    return { ...data, emails, total: emails.length }
+  }, [data, view, filter])
+
+  // Refresh selected email when list updates
   useEffect(() => {
     if (!selectedEmail) return
     const fresh = data.emails.find((e) => e.id === selectedEmail.id)
@@ -106,7 +123,6 @@ function MailMind() {
       markReadLocally(e.id)
       patchEmail(e.id, { is_read: true }).catch(() => {})
     }
-    // Lazy-load the full body — list payload only carries a short preview.
     setBodyLoading(true)
     getEmail(e.id)
       .then((full) => {
@@ -120,18 +136,31 @@ function MailMind() {
       .finally(() => setBodyLoading(false))
   }, [markReadLocally, setData])
 
+  // Click an account in the sidebar → filter to it. Click the same account
+  // again → clear the filter (show mail from all accounts). This applies to
+  // inbox, unread, AND important views.
+  const handleSelectAccount = useCallback((id) => {
+    setSelectedAccount((cur) => {
+      const next = cur === id ? null : id
+      setPage(1)
+      return next
+    })
+  }, [])
+
   // ---- triage scan -------------------------------------------------------
   const pollScan = useCallback(async () => {
     clearInterval(scanTimer.current)
     scanTimer.current = setInterval(async () => {
       try {
         const s = await getScanStatus()
-        // Live progress for the sidebar bar.
         if (s.running) setScanProgress({ scanned: s.scanned || 0, total: s.total || 0 })
         if (!s.running) {
           clearInterval(scanTimer.current)
           setScanRunning(false)
-          setScanProgress({ scanned: 0, total: 0 })
+          // Keep progress around so the pill can show its "ready" state
+          // (100/100) before its 2.5s fade-out timer fires.
+          if (s.total) setScanProgress({ scanned: s.total, total: s.total })
+          setTimeout(() => setScanProgress({ scanned: 0, total: 0 }), 3000)
           if (s.summary) {
             if (s.summary.unavailable) {
               toast.error('Ollama unavailable — start it or check the model name in Settings.')
@@ -141,7 +170,6 @@ function MailMind() {
               toast.info('Triage done — no new emails to scan. Try "rescan all" to re-triage everything.')
             }
           }
-          // Re-fetch the list so AI summaries replace any "Analyzing…" placeholders.
           setScanTick((t) => t + 1)
         }
       } catch { /* keep polling */ }
@@ -167,87 +195,99 @@ function MailMind() {
   }, [setData])
 
   const accountsById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
+  const accountColorMap = useMemo(() => buildAccountColorMap(accounts), [accounts])
 
   const showInbox = view === 'inbox' || view === 'important' || view === 'starred'
 
-  return (
-    <div className="relative h-screen w-screen overflow-hidden">
-      {/* Ambient color orbs — behind everything so glass can refract them. */}
-      <div className="ambient-orbs" aria-hidden><div className="orb" /></div>
+  // Draggable divider between the list panel and the reading pane.
+  const { leftPct, onPointerDown: onDividerDown, dragging } = useResizable({ initial: 38, min: 20, max: 70 })
 
-      {/* The 3-panel shell sits above the orbs. */}
-      <div className="relative z-10 h-full flex">
+  return (
+    <div className={`app-shell${amoled ? ' amoled' : ''}`}>
+      {/* 3-column flex layout */}
+      <div className="flex h-full w-full">
         <Sidebar
           view={view}
           onView={setView}
-          accounts={accounts}
-          selectedAccount={selectedAccount}
-          onSelectAccount={(id) => { setSelectedAccount(id); setPage(1) }}
           syncStatus={syncStatus}
           mockMode={settings.mock_mode}
           scanRunning={scanRunning || manualRunning}
           onScan={() => handleScan({ rescan: false })}
           onRescanAll={() => handleScan({ rescan: true })}
           onSyncNow={syncNow}
+          amoled={amoled}
+          accounts={accounts}
+          selectedAccount={selectedAccount}
+          onSelectAccount={handleSelectAccount}
+          accountColorMap={accountColorMap}
         />
         {showInbox ? (
-          <Group orientation="horizontal" className="flex-1 min-w-0 h-full">
-            <Panel defaultSize={52} minSize={25}>
-              <EmailList
-                filter={effectiveFilter}
-                onFilter={(f) => { setFilter(f); setPage(1) }}
-                query={query}
-                onQuery={setQuery}
-                data={data}
-                loading={loading}
-                error={error}
-                accounts={accounts}
-                selectedAccount={selectedAccount}
-                selectedEmailId={selectedEmail?.id}
-                onSelectEmail={onSelectEmail}
-                onToggleRead={toggleRead}
-                onToggleStar={toggleStar}
-                page={page}
-                onPageChange={setPage}
-                view={view}
-              />
-            </Panel>
-            <Separator className="resize-handle" />
-            <Panel defaultSize={48} minSize={20}>
-              <EmailReader
-                email={selectedEmail}
-                account={selectedEmail ? accountsById[selectedEmail.account_id] : undefined}
-                bodyLoading={bodyLoading}
-                onToggleRead={toggleRead}
-                onToggleStar={toggleStar}
-                onClose={() => setSelectedEmail(null)}
-                onToast={toast}
-                onRescanned={onRescanned}
-              />
-            </Panel>
-          </Group>
+          <>
+            <EmailList
+              filter={filter}
+              onFilter={(f) => { setFilter(f); setPage(1) }}
+              query={query}
+              onQuery={setQuery}
+              data={visibleData}
+              loading={loading}
+              error={error}
+              accounts={accounts}
+              selectedAccount={selectedAccount}
+              selectedEmailId={selectedEmail?.id}
+              onSelectEmail={onSelectEmail}
+              onToggleRead={toggleRead}
+              onToggleStar={toggleStar}
+              page={page}
+              onPageChange={setPage}
+              view={view}
+              style={{ width: `${leftPct}%` }}
+              amoled={amoled}
+              accountColorMap={accountColorMap}
+            />
+            {/* Draggable resize divider */}
+            <div
+              className="resize-divider"
+              data-resizer="true"
+              data-resizer-active={dragging ? 'true' : 'false'}
+              onPointerDown={onDividerDown}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize panels"
+            />
+            <EmailReader
+              email={selectedEmail}
+              account={selectedEmail ? accountsById[selectedEmail.account_id] : undefined}
+              bodyLoading={bodyLoading}
+              onToggleRead={toggleRead}
+              onToggleStar={toggleStar}
+              onClose={() => setSelectedEmail(null)}
+              onToast={toast}
+              onRescanned={onRescanned}
+              scanRunning={scanRunning}
+              scanProgress={scanProgress}
+              onCancelScan={async () => {
+                try {
+                  await cancelScan()
+                  toast.info('Cancel requested — will stop after current batch.')
+                } catch (e) {
+                  toast.error(`Cancel failed: ${e.message}`)
+                }
+              }}
+              amoled={amoled}
+              accountColorMap={accountColorMap}
+            />
+          </>
         ) : (
           <Settings
             onBack={() => setView('inbox')}
             onToast={toast}
             onSettingsChanged={(s) => setSettings((cur) => ({ ...cur, ...s }))}
             onAccountsChanged={refreshAccounts}
+            amoled={amoled}
+            onAmoledChange={handleAmoledChange}
           />
         )}
       </div>
-
-      {/* Fixed bottom scan-progress bar — spans the full app width. */}
-      <ScanProgressBar
-        progress={scanRunning ? scanProgress : null}
-        onCancel={async () => {
-          try {
-            await cancelScan()
-            toast.info('Cancel requested — will stop after current batch.')
-          } catch (e) {
-            toast.error(`Cancel failed: ${e.message}`)
-          }
-        }}
-      />
     </div>
   )
 }

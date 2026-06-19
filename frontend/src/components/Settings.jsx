@@ -16,7 +16,7 @@ import {
  * (add account, test connection, clear data, switch model) are explicit
  * buttons.
  */
-export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged }) {
+export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged, amoled, onAmoledChange }) {
   const [settings, setSettings] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [credentialsConfigured, setCredentialsConfigured] = useState(false)
@@ -172,8 +172,8 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
   return (
     <div
-      className="flex-1 min-w-0 h-full overflow-y-auto glass-subtle"
-      style={{ borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}
+      className="flex-1 min-w-0 h-full overflow-y-auto"
+      style={{ background: amoled ? '#000000' : '#1a1a2e' }}
     >
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
@@ -183,8 +183,8 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             onClick={onBack}
             title="Back to inbox"
             aria-label="Back to inbox"
-            className="h-8 w-8 rounded-full glass-subtle flex items-center justify-center transition-colors hover:text-white text-sender"
-            style={{ border: '0.5px solid rgba(255,255,255,0.1)' }}
+            className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:text-white text-sender"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)' }}
           >
             <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
@@ -196,6 +196,18 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           </div>
         </header>
 
+        {/* Appearance */}
+        <Section title="Appearance" subtitle="Display preferences.">
+          <Field label="AMOLED mode" sublabel="Pure black backgrounds for OLED screens">
+            <Toggle
+              label="AMOLED mode"
+              checked={!!amoled}
+              onChange={(v) => onAmoledChange?.(v)}
+              activeColor="#5B8DEF"
+            />
+          </Field>
+        </Section>
+
         {/* Accounts */}
         <Section title="Gmail Accounts" subtitle="OAuth tokens are Fernet-encrypted in ~/.mailmind/accounts.json.">
           {!credentialsConfigured && (
@@ -206,7 +218,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           )}
           <div className="space-y-2">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 glass-bubble px-4 py-3">
+              <div key={a.id} className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: a.color }} />
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-[13px] text-sender truncate">{a.email}</div>
@@ -257,7 +269,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               placeholder="gemma3:4b" className="input font-mono" />
           </Field>
           {/* Switch model: delete the current model and pull a new one */}
-          <div className="glass-subtle rounded-xl p-3.5 space-y-2.5">
+          <div className="rounded-lg p-3.5 space-y-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <div className="text-[12px] text-subject">
               Switch model (deletes <span className="font-mono text-sender">{settings.ollama_model || 'current'}</span> and pulls a new one)
             </div>
@@ -278,8 +290,8 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             </button>
           </div>
           <button onClick={handleTestConnection} disabled={busy === 'conn'}
-            className="px-3.5 py-2 rounded-full text-[13px] glass-subtle text-sender hover:text-white transition-colors disabled:opacity-40"
-            style={{ border: '0.5px solid rgba(255,255,255,0.1)' }}>
+            className="px-3.5 py-2 rounded-lg text-[13px] text-sender hover:text-white transition-colors disabled:opacity-40"
+            style={{ border: '0.5px solid rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.04)' }}>
             {busy === 'conn' ? 'Testing…' : 'Test Connection'}
           </button>
           {conn && (
@@ -338,21 +350,20 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
         </Section>
       </div>
 
-      {/* Glass input style — translucent surface refracting the ambient orbs. */}
+      {/* Flat input style — no glass, no blur */}
       <style>{`
         .input {
           width: 100%;
           background: rgba(255,255,255,0.04);
-          backdrop-filter: blur(12px);
-          border: 0.5px solid rgba(255,255,255,0.1);
-          border-radius: 10px;
+          border: 0.5px solid rgba(255,255,255,0.09);
+          border-radius: 8px;
           padding: 9px 12px;
           font-size: 13px;
           color: rgba(255,255,255,0.88);
           transition: border-color 0.15s ease;
         }
         .input::placeholder { color: rgba(255,255,255,0.3); }
-        .input:focus { outline: none; border-color: #7c6ef9; }
+        .input:focus { outline: none; border-color: #5B8DEF; }
         .input:disabled { opacity: 0.5; }
       `}</style>
     </div>
@@ -361,7 +372,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
 function Section({ title, subtitle, children }) {
   return (
-    <section className="glass-subtle rounded-2xl px-5 py-4 space-y-3">
+    <section className="rounded-lg px-5 py-4 space-y-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
       <div>
         <h2 className="text-[14px] font-medium text-primary">{title}</h2>
         {subtitle && <p className="text-[12px] text-timestamp mt-0.5">{subtitle}</p>}
@@ -371,10 +382,11 @@ function Section({ title, subtitle, children }) {
   )
 }
 
-function Field({ label, children }) {
+function Field({ label, sublabel, children }) {
   return (
     <label className="block">
-      <span className="block text-[12px] text-subject mb-1.5">{label}</span>
+      <span className="block text-[13px] text-primary mb-0.5">{label}</span>
+      {sublabel && <span className="block text-[11px] text-timestamp mb-1.5">{sublabel}</span>}
       {children}
     </label>
   )
@@ -388,16 +400,17 @@ function Select({ value, onChange, options }) {
   )
 }
 
-function Toggle({ label, checked, onChange }) {
+function Toggle({ label, checked, onChange, activeColor }) {
+  const trackColor = activeColor || '#f59e0b'
   return (
     <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => onChange(!checked)}>
       <span className="text-[13px] text-sender">{label}</span>
       <span
-        className="relative h-5 w-9 rounded-full transition-colors block pointer-events-none"
-        style={{ background: checked ? '#f59e0b' : 'rgba(255,255,255,0.1)' }}
+        className="relative h-5 w-9 rounded-full block pointer-events-none"
+        style={{ background: checked ? trackColor : 'rgba(255,255,255,0.12)' }}
       >
         <span
-          className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform block"
+          className="absolute top-0.5 h-4 w-4 rounded-full bg-white block"
           style={{ transform: checked ? 'translateX(18px)' : 'translateX(2px)' }}
         />
       </span>

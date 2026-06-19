@@ -47,9 +47,7 @@ def list_emails(
     if filter == "unread":
         stmt = stmt.where(Email.is_read.is_(False))
     elif filter == "important":
-        stmt = stmt.where(Email.important.is_(True)).order_by(
-            Email.importance_score.desc().nullslast()
-        )
+        stmt = stmt.where(Email.important.is_(True))
     elif filter == "starred":
         stmt = stmt.where(Email.is_starred.is_(True))
 
@@ -67,9 +65,7 @@ def list_emails(
             )
         )
 
-    # Default ordering is date desc, unless "important" already ordered by score.
-    if filter != "important":
-        stmt = stmt.order_by(Email.date.desc().nullslast())
+    stmt = stmt.order_by(Email.date.desc().nullslast())
 
     # total count for pagination
     from sqlalchemy import func

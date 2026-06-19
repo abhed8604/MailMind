@@ -1,31 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
-import TriageBadge from './TriageBadge'
-import { categoryMeta, relativeTime } from '../lib/categories'
+import ScanProgressBar from './ScanProgressBar'
+import { categoryMeta, relativeTime, scoreBadgeStyle } from '../lib/categories'
+import { accountRamp, companyForEmail } from '../lib/company'
 import { rescanEmail } from '../api/client'
-import { companyForEmail } from '../lib/company'
 import {
   ReplyIcon, ForwardIcon, StarIcon, ArchiveIcon, TrashIcon,
-  SendIcon, PaperclipIcon, CloseIcon,
+  SendIcon, CloseIcon,
 } from './Icon'
 
 /**
- * Panel 3 — mail reader.
+ * Panel 3 — reading pane (flex: 1).
  *
- * Structure: subject heading → sender row (avatar + name + email + timestamp)
- * → action bar (reply / forward / star / archive / trash) → scrollable body
- * → attachment chips → reply bar pinned to the bottom. The reply bar and
- * attachment chips use the same frosted glass as the list bubbles.
- *
- * Width is controlled by the parent PanelGroup; this component fills its panel.
- *
- * Star works end-to-end. Reply / Forward / Archive / Trash surface a clear
- * toast because the Gmail integration is read+modify scope only (no send /
- * delete yet) — we never fail silently.
+ * Toolbar (top): category pill left, action icons right.
+ * Meta block: subject, From/To/Date, badge row (score + account pill + star).
+ * Body: scrollable email HTML or text.
+ * Reply bar: pinned to bottom.
  */
-export default function EmailReader({ email, account, bodyLoading, onToggleRead, onToggleStar, onClose, onToast, onRescanned }) {
+export default function EmailReader({
+  email, account, bodyLoading, onToggleRead, onToggleStar,
+  onClose, onToast, onRescanned, scanRunning, scanProgress,
+  onCancelScan, amoled, accountColorMap,
+}) {
   const [rescanning, setRescanning] = useState(false)
-  const [replyOpen, setReplyOpen] = useState(false)
   const [replyText, setReplyText] = useState('')
 
   const cleanHtml = useMemo(() => {
@@ -33,23 +30,32 @@ export default function EmailReader({ email, account, bodyLoading, onToggleRead,
     return DOMPurify.sanitize(email.body_html, { USE_PROFILES: { html: true } })
   }, [email?.body_html])
 
-  // True when the full body hasn't been fetched yet.
   const bodyPending = !!email && bodyLoading && !email.body_html
 
   if (!email) {
     return (
       <aside
-        className="w-full h-full hidden md:flex flex-col items-center justify-center text-white/25 text-[13px] glass-subtle"
-        style={{ borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}
+        className="flex-1 h-full flex flex-col items-center justify-center"
+        style={{ background: amoled ? '#000000' : '#1a1a2e', position: 'relative' }}
       >
-        <div className="text-4xl mb-3 opacity-30">✉️</div>
-        Select an email to read it.
+        <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+          Select an email to read it.
+        </span>
+        <ScanProgressBar
+          running={scanRunning}
+          progress={scanProgress}
+          onCancel={onCancelScan}
+          amoled={amoled}
+        />
       </aside>
     )
   }
 
   const cat = categoryMeta(email.category)
   const senderLabel = email.sender_name || companyForEmail(email.sender_email)
+  const acctRamp = (accountColorMap && accountColorMap.get(email.account_id))
+    || accountRamp(account?.email || email.sender_email)
+  const score = email.importance_score
 
   async function handleRescan() {
     setRescanning(true)
@@ -69,143 +75,237 @@ export default function EmailReader({ email, account, bodyLoading, onToggleRead,
   }
 
   function notAvailable(action) {
-    onToast?.info(`${action} needs Gmail send/modify permissions — not wired up yet. Star and read/unread work.`)
+    onToast?.info(`${action} needs Gmail send/modify permissions — not wired up yet.`)
   }
 
   return (
     <aside
-      className="w-full h-full flex flex-col glass-subtle"
-      style={{ borderLeft: '0.5px solid rgba(255,255,255,0.06)' }}
+      className="flex-1 min-w-0 h-full flex flex-col"
+      style={{ background: amoled ? '#000000' : '#1a1a2e', position: 'relative' }}
     >
-      {/* Subject heading */}
-      <div className="px-5 pt-4 pb-3">
-        <div className="flex items-start gap-2">
-          <h1 className="flex-1 text-primary text-[16px] font-medium leading-snug">
-            {email.subject || '(no subject)'}
-          </h1>
-          <button onClick={onClose} className="md:hidden text-white/40 hover:text-white" aria-label="Close">
-            <CloseIcon />
-          </button>
-        </div>
-      </div>
-
-      {/* Sender row */}
-      <div className="px-5 pb-3 flex items-start gap-3">
-        <Avatar name={senderLabel} color={account?.color} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span className="text-sender text-[13px] font-medium truncate">{senderLabel}</span>
-            {email.sender_email && (
-              <span className="text-timestamp text-[11px] font-mono truncate hidden sm:inline">
-                &lt;{email.sender_email}&gt;
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-timestamp text-[11px] font-mono">
-              {email.date ? new Date(email.date).toLocaleString() : ''}
-            </span>
-            <span className="text-timestamp text-[11px]">· {relativeTime(email.date)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Triage summary (compact, inline) */}
-      {(email.scanned_at || email.importance_score != null) && (
-        <div className="mx-5 mb-3 px-3 py-2 rounded-xl flex items-center gap-2 flex-wrap"
-          style={{ background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
-          <TriageBadge email={email} />
-          {email.importance_reason && (
-            <span className="text-[11px] text-white/40 italic truncate flex-1 min-w-0">
-              “{email.importance_reason}”
+      {/* ---- TOOLBAR (top bar) ---- */}
+      <div
+        className="flex items-center justify-between shrink-0"
+        style={{ padding: '8px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.07)' }}
+      >
+        {/* Left: category tag pill */}
+        <div className="flex items-center gap-2">
+          {email.category && (
+            <span
+              className="rounded-full"
+              style={{
+                fontSize: '10px',
+                background: 'rgba(255,255,255,0.06)',
+                color: 'rgba(255,255,255,0.28)',
+                padding: '2px 7px',
+              }}
+            >
+              {cat.emoji} {cat.label} · {email.category === 'spam' ? 'spam' : 'promotional'}
             </span>
           )}
-          <button
-            onClick={handleRescan}
-            disabled={rescanning}
-            className="text-[10px] text-white/40 hover:text-white/80 disabled:opacity-40 uppercase tracking-wide"
-          >
-            {rescanning ? 'Scanning…' : 'Rescan'}
-          </button>
+          {(email.scanned_at || email.importance_score != null) && (
+            <button
+              onClick={handleRescan}
+              disabled={rescanning}
+              className="text-[10px] uppercase tracking-wide transition-colors disabled:opacity-30"
+              style={{ color: 'rgba(255,255,255,0.25)' }}
+            >
+              {rescanning ? 'Scanning…' : 'Rescan'}
+            </button>
+          )}
         </div>
-      )}
 
-      {/* Action bar */}
-      <div className="px-5 pb-3 flex items-center gap-1">
-        <ActionIcon label="Reply" onClick={() => { setReplyOpen(true); notAvailable('Reply (compose)') }}>
-          <ReplyIcon />
-        </ActionIcon>
-        <ActionIcon label="Forward" onClick={() => notAvailable('Forward')}>
-          <ForwardIcon />
-        </ActionIcon>
-        <ActionIcon
-          label="Star"
-          onClick={() => onToggleStar?.(email)}
-          active={email.is_starred}
-          activeColor="#fbbf24"
-        >
-          <StarIcon filled={email.is_starred} />
-        </ActionIcon>
-        <ActionIcon label="Archive" onClick={() => notAvailable('Archive')}>
-          <ArchiveIcon />
-        </ActionIcon>
-        <ActionIcon label="Trash" onClick={() => notAvailable('Delete')}>
-          <TrashIcon />
-        </ActionIcon>
+        {/* Right: action icons */}
+        <div className="flex items-center" style={{ gap: '14px' }}>
+          <ActionButton label="Reply" onClick={() => notAvailable('Reply')}>
+            <ReplyIcon width={16} height={16} />
+          </ActionButton>
+          <ActionButton label="Forward" onClick={() => notAvailable('Forward')}>
+            <ForwardIcon width={16} height={16} />
+          </ActionButton>
+          <ActionButton
+            label="Star"
+            onClick={() => onToggleStar?.(email)}
+            active={email.is_starred}
+          >
+            <StarIcon width={16} height={16} filled={email.is_starred} />
+          </ActionButton>
+          <ActionButton label="Archive" onClick={() => notAvailable('Archive')}>
+            <ArchiveIcon width={16} height={16} />
+          </ActionButton>
+          <ActionButton label="Delete" onClick={() => notAvailable('Delete')}>
+            <TrashIcon width={16} height={16} />
+          </ActionButton>
+          <ActionButton label="Close" onClick={onClose}>
+            <CloseIcon width={16} height={16} />
+          </ActionButton>
+        </div>
       </div>
 
-      {/* Divider before body */}
-      <div className="mx-5 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+      {/* ---- EMAIL META BLOCK ---- */}
+      <div
+        className="shrink-0 mx-4 mt-3"
+        style={{
+          background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
+          borderRadius: '8px',
+          padding: '12px 14px',
+        }}
+      >
+        {/* Subject */}
+        <h1 style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.88)', lineHeight: '1.3' }}>
+          {email.subject || '(no subject)'}
+        </h1>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* Meta rows: From / To / Date */}
+        <div className="mt-2 space-y-1">
+          <MetaRow label="From" value={`${senderLabel} <${email.sender_email || ''}>`} />
+          <MetaRow label="Date" value={email.date ? new Date(email.date).toLocaleString() : ''} />
+        </div>
+
+        {/* Badge row */}
+        <div
+          className="flex items-center justify-between gap-2 mt-2"
+          style={{ paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
+        >
+          {/* Relevance score chip */}
+          {score != null && (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                padding: '2px 6px',
+                borderRadius: '3px',
+                ...scoreBadgeStyle(score),
+              }}
+            >
+              relevance {score}
+            </span>
+          )}
+
+          {/* Account pill — shows receiving account email */}
+          <span
+            style={{
+              fontSize: '9px',
+              fontWeight: 500,
+              padding: '1px 6px',
+              borderRadius: '999px',
+              background: acctRamp.pillBg,
+              color: acctRamp.color,
+            }}
+          >
+            {account?.email || email.sender_email}
+          </span>
+
+          {/* Star */}
+          <span
+            className="cursor-pointer"
+            style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.15)', fontSize: '14px' }}
+            onClick={() => onToggleStar?.(email)}
+          >
+            <StarIcon width={14} height={14} filled={email.is_starred} />
+          </span>
+        </div>
+      </div>
+
+      {/* ---- EMAIL BODY ---- */}
+      <div className="flex-1 overflow-y-auto" style={{ padding: '20px 22px' }}>
         {bodyPending ? (
           <BodySkeleton />
         ) : cleanHtml ? (
           <EmailFrame html={cleanHtml} />
         ) : (
-          <pre className="email-body whitespace-pre-wrap">{email.body_text || email.body_text === '' ? email.body_text : '(no body)'}</pre>
+          <pre className="email-body whitespace-pre-wrap" style={{ margin: 0 }}>
+            {email.body_text || '(no body)'}
+          </pre>
         )}
       </div>
 
-      {/* Attachment chips (only render if the email carries attachment data) */}
-      {Array.isArray(email.attachments) && email.attachments.length > 0 && (
-        <div className="px-5 pb-3 flex flex-wrap gap-2">
-          {email.attachments.map((att, i) => (
-            <div key={i} className="glass-subtle rounded-full px-2.5 py-1 flex items-center gap-1.5 text-[11px] text-white/55">
-              <PaperclipIcon width={12} height={12} />
-              <span className="truncate max-w-[140px]">{att.name || att.filename || 'attachment'}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Floating scanning pill */}
+      <ScanProgressBar
+        running={scanRunning}
+        progress={scanProgress}
+        onCancel={onCancelScan}
+        amoled={amoled}
+      />
 
-      {/* Reply bar pinned to the bottom — frosted glass */}
-      <div className="px-5 pb-4 pt-2">
-        <div className="glass rounded-full flex items-center gap-2 pl-4 pr-1.5 py-1.5">
+      {/* ---- REPLY BAR (pinned to bottom) ---- */}
+      <div
+        className="shrink-0 flex items-center gap-2"
+        style={{
+          padding: '8px 14px',
+          background: 'rgba(255,255,255,0.02)',
+          borderTop: '0.5px solid rgba(255,255,255,0.07)',
+        }}
+      >
+        <div
+          className="flex items-center flex-1"
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '0.5px solid rgba(255,255,255,0.09)',
+            borderRadius: '8px',
+            padding: '8px 12px',
+          }}
+        >
           <input
             type="text"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
-            onFocus={() => setReplyOpen(true)}
-            placeholder={replyOpen ? 'Write a reply…' : 'Reply…'}
-            className="flex-1 bg-transparent text-[13px] text-primary placeholder:text-white/30 focus:outline-none"
+            placeholder={`Reply to ${senderLabel}...`}
+            className="bg-transparent flex-1 text-[12px] focus:outline-none"
+            style={{ color: 'rgba(255,255,255,0.80)' }}
           />
-          <button
-            onClick={() => {
-              if (replyText.trim()) notAvailable('Send reply')
-              setReplyText('')
-              setReplyOpen(false)
-            }}
-            className="h-8 w-8 rounded-full flex items-center justify-center transition-colors"
-            style={{ background: '#7c6ef9', color: '#fff' }}
-            aria-label="Send"
-          >
-            <SendIcon width={15} height={15} />
-          </button>
         </div>
+        <button
+          onClick={() => { if (replyText.trim()) notAvailable('Send reply'); setReplyText('') }}
+          className="flex items-center justify-center"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: '8px',
+            background: '#5B8DEF',
+            color: '#fff',
+          }}
+          aria-label="Send"
+        >
+          <SendIcon width={14} height={14} />
+        </button>
       </div>
     </aside>
+  )
+}
+
+/** Meta row: fixed-width label + value. */
+function MetaRow({ label, value }) {
+  return (
+    <div className="flex gap-2">
+      <span className="shrink-0" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', width: 34 }}>
+        {label}
+      </span>
+      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)' }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+/** Toolbar action icon button. */
+function ActionButton({ children, label, onClick, active }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className="transition-colors"
+      style={{
+        color: active ? '#f0a030' : 'rgba(255,255,255,0.30)',
+        background: 'transparent',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.60)' }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.30)' }}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -216,50 +316,17 @@ function BodySkeleton() {
       <div className="h-4 w-full rounded-full skeleton" />
       <div className="h-4 w-5/6 rounded-full skeleton" />
       <div className="h-4 w-2/3 rounded-full skeleton" />
-      <div className="h-4 w-full rounded-full skeleton" />
-      <div className="h-4 w-1/2 rounded-full skeleton" />
-    </div>
-  )
-}
-
-/** Round icon button in the reader action bar. */
-function ActionIcon({ children, label, onClick, active, activeColor }) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className="h-8 w-8 rounded-full flex items-center justify-center text-white/55 hover:text-white hover:bg-white/8 transition-colors"
-      style={active && activeColor ? { color: activeColor } : undefined}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Avatar({ name, color }) {
-  const initial = (name || '?').trim().charAt(0).toUpperCase()
-  const c = color || '#7c6ef9'
-  return (
-    <div
-      className="h-9 w-9 rounded-full flex items-center justify-center text-[13px] font-medium shrink-0"
-      style={{ background: `${c}33`, color: c, boxShadow: `0 0 8px ${c}44` }}
-    >
-      {initial}
     </div>
   )
 }
 
 /**
  * Renders email HTML inside a sandboxed iframe so the email's own <style> /
- * <body> rules can't leak out and override the app theme. The iframe auto-sizes
- * to its content height. Background/text colors are themed to match the dark UI.
+ * <body> rules can't leak out and override the app theme.
  */
 function EmailFrame({ html }) {
   const ref = useRef(null)
 
-  // Wrap the email HTML in a themed document and write it into the iframe.
   useEffect(() => {
     const iframe = ref.current
     if (!iframe) return
@@ -272,16 +339,19 @@ function EmailFrame({ html }) {
         html, body {
           margin: 0; padding: 0;
           background: transparent;
-          color: rgba(255,255,255,0.78);
-          font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-          font-size: 14px; line-height: 1.65;
+          color: rgba(255,255,255,0.60);
+          font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px; line-height: 1.75;
           word-wrap: break-word;
         }
-        a { color: #a78bfa; }
+        a { color: #7eaaff; }
         img { max-width: 100%; height: auto; border-radius: 8px; }
         table { max-width: 100%; }
         pre { white-space: pre-wrap; word-wrap: break-word; }
         * { max-width: 100%; }
+        p { margin: 0 0 10px; }
+        ul, ol { margin: 0 0 10px 18px; }
+        li { margin-bottom: 3px; }
       </style>
     </head><body>${html}</body></html>`
 
@@ -289,7 +359,6 @@ function EmailFrame({ html }) {
     doc.write(wrapped)
     doc.close()
 
-    // Size the iframe to fit its content.
     const resize = () => {
       try {
         const h = doc.documentElement.scrollHeight || doc.body.scrollHeight
@@ -297,7 +366,6 @@ function EmailFrame({ html }) {
       } catch { /* ignore */ }
     }
     resize()
-    // Re-measure shortly after in case images/fonts shift layout.
     const t1 = setTimeout(resize, 100)
     const t2 = setTimeout(resize, 500)
     return () => { clearTimeout(t1); clearTimeout(t2) }

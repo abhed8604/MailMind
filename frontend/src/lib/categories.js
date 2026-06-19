@@ -4,24 +4,23 @@
 // read correctly over the glass surfaces and ambient orbs.
 
 export const CATEGORIES = {
-  action_required: { emoji: '🔴', label: 'Action',     color: '#f87171' },
-  deadline:        { emoji: '⏰', label: 'Deadline',    color: '#fbbf24' },
-  financial:       { emoji: '💰', label: 'Financial',   color: '#34d399' },
-  personal:        { emoji: '✉️', label: 'Personal',    color: '#60a5fa' },
-  newsletter:      { emoji: '📰', label: 'Newsletter',  color: '#a78bfa' },
-  spam:            { emoji: '🚫', label: 'Spam',        color: '#fb7185' },
-  other:           { emoji: '📎', label: 'Other',       color: '#94a3b8' },
+  action_required: { emoji: '🔴', label: 'Action',     color: '#4ecf8e' },
+  deadline:        { emoji: '⏰', label: 'Deadline',    color: '#f0a030' },
+  financial:       { emoji: '💰', label: 'Financial',   color: '#4ecf8e' },
+  personal:        { emoji: '✉️', label: 'Personal',    color: '#7eaaff' },
+  newsletter:      { emoji: '📰', label: 'Newsletter',  color: '#7eaaff' },
+  spam:            { emoji: '🚫', label: 'Spam',        color: '#f0a030' },
+  other:           { emoji: '📎', label: 'Other',       color: 'rgba(255,255,255,0.28)' },
 }
 
-// Per-category tint fills for the glass bubbles, per the design spec.
-// (Exact rgba values from the brief.)
+// Per-category tint fills. Flat rgba() values, no gradients.
 export const CATEGORY_TINTS = {
-  action_required: 'rgba(248,113,113,0.13)',
-  deadline:        'rgba(239,159,39,0.11)',
-  financial:       'rgba(29,158,117,0.12)',
-  personal:        'rgba(96,165,250,0.12)',
-  newsletter:      'rgba(124,110,249,0.13)',
-  spam:            'rgba(244,114,182,0.12)',
+  action_required: 'rgba(78,207,142,0.10)',
+  deadline:        'rgba(240,160,48,0.10)',
+  financial:       'rgba(78,207,142,0.10)',
+  personal:        'rgba(91,141,239,0.10)',
+  newsletter:      'rgba(91,141,239,0.10)',
+  spam:            'rgba(240,160,48,0.10)',
   other:           'rgba(255,255,255,0.04)',
 }
 
@@ -34,24 +33,24 @@ export function categoryTint(cat) {
 }
 
 /**
- * Score → small badge style. Returns an inline-style object so it composes
- * cleanly over glass. High scores lean amber; mid scores purple (brand).
- * Scores are on a 0–100 scale (from the LLM).
+ * Score → relevance chip style. Returns an inline-style object.
+ * Three tiers per the design spec:
+ *   80–100 → green  (#4ecf8e)
+ *   40–79  → amber  (#f0a030)
+ *   0–39   → grey   (rgba(255,255,255,0.28))
+ * Scores are on a 0–100 scale.
  */
 export function scoreBadgeStyle(score) {
   if (score == null) {
-    return { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: '0.5px solid rgba(255,255,255,0.08)' }
+    return { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.28)' }
   }
   if (score >= 80) {
-    return { background: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: '0.5px solid rgba(245,158,11,0.4)' }
+    return { background: 'rgba(30,200,120,0.15)', color: '#4ecf8e' }
   }
-  if (score >= 60) {
-    return { background: 'rgba(124,110,249,0.18)', color: '#a78bfa', border: '0.5px solid rgba(124,110,249,0.4)' }
+  if (score >= 40) {
+    return { background: 'rgba(240,160,48,0.13)', color: '#f0a030' }
   }
-  if (score >= 30) {
-    return { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.55)', border: '0.5px solid rgba(255,255,255,0.08)' }
-  }
-  return { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)', border: '0.5px solid rgba(255,255,255,0.06)' }
+  return { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.28)' }
 }
 
 // Relative time like "2h ago" / "3d ago".

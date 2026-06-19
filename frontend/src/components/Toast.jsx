@@ -54,16 +54,19 @@ export function ToastProvider({ children }) {
 
 function ToastCard({ toast, onClose }) {
   const styles = {
-    info:    'bg-ink-900 border-ink-700 text-ink-200',
-    success: 'bg-ink-900 border-emerald-500/40 text-emerald-200',
-    error:   'bg-ink-900 border-red-500/40 text-red-200',
+    info:    { bg: '#1a1a2e', border: 'rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.85)' },
+    success: { bg: '#1a1a2e', border: 'rgba(78,207,142,0.4)',    color: '#4ecf8e' },
+    error:   { bg: '#1a1a2e', border: 'rgba(248,113,113,0.4)',   color: '#fca5a5' },
   }[toast.kind]
   const icon = { info: 'ℹ️', success: '✅', error: '⚠️' }[toast.kind]
   return (
-    <div className={`border rounded-md px-3 py-2.5 text-sm shadow-lg flex gap-2 ${styles}`}>
+    <div
+      className="rounded-lg px-3 py-2.5 text-sm flex gap-2"
+      style={{ background: styles.bg, border: `0.5px solid ${styles.border}`, color: styles.color }}
+    >
       <span>{icon}</span>
       <span className="flex-1 leading-snug">{toast.message}</span>
-      <button onClick={onClose} className="text-ink-400 hover:text-ink-200" aria-label="dismiss">✕</button>
+      <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.4)' }} aria-label="dismiss">✕</button>
     </div>
   )
 }

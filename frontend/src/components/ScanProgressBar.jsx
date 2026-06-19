@@ -1,69 +1,106 @@
+import { useEffect, useState, useRef } from 'react'
+
 /**
- * Fixed bottom scan-progress bar.
+ * Floating scanning-progress pill rendered inside the reading pane.
  *
- * Spans the full width of the app, pinned just above the bottom edge. Shows
- * live triage progress (scanned / total), a liquid-glass fill, and a Cancel
- * button that stops the scan after the current batch. Only rendered while a
- * scan is running.
+ * Props:
+ *   running   — boolean, true while a scan is active
+ *   progress  — { scanned, total } or null
+ *   onCancel  — cancel callback
+ *   amoled    — boolean, AMOLED mode active
  */
-export default function ScanProgressBar({ progress, onCancel }) {
-  if (!progress || !progress.total) return null
-  const pct = Math.min(100, Math.round((progress.scanned / progress.total) * 100))
+export default function ScanProgressBar({ running, progress, onCancel, amoled }) {
+  const [fading, setFading] = useState(false)
+  const [show, setShow] = useState(false)
+  const fadeTimer = useRef(null)
+
+  // Show pill when running starts or progress exists
+  useEffect(() => {
+    if (running || (progress && progress.total > 0)) {
+      setShow(true)
+      setFading(false)
+      if (fadeTimer.current) clearTimeout(fadeTimer.current)
+    }
+  }, [running, progress])
+
+  // When scan completes, start 2.5s fade-out timer
+  useEffect(() => {
+    if (!running && progress && progress.total > 0) {
+      fadeTimer.current = setTimeout(() => {
+        setFading(true)
+        // After fade animation (0.4s), hide completely
+        setTimeout(() => setShow(false), 400)
+      }, 2500)
+    }
+    return () => { if (fadeTimer.current) clearTimeout(fadeTimer.current) }
+  }, [running, progress?.total])
+
+  if (!show || !progress || !progress.total) return null
+
+  const { scanned, total } = progress
+  const completed = !running
 
   return (
     <div
-      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 glass rounded-full pl-4 pr-2 py-1.5"
       style={{
-        minWidth: 280,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 40px rgba(124,110,249,0.10)',
+        position: 'absolute',
+        bottom: 20,
+        right: 24,
+        zIndex: 10,
+        background: amoled ? '#0a0a0a' : '#1e1e32',
+        border: '0.5px solid rgba(255,255,255,0.12)',
+        borderRadius: 999,
+        padding: '6px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.7)',
+        transition: 'opacity 0.4s ease',
+        opacity: fading ? 0 : 1,
       }}
     >
-      {/* Animated scanning glyph */}
-      <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping" style={{ background: '#f59e0b' }} />
-        <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: '#f59e0b' }} />
-      </span>
-
-      {/* Label */}
-      <span className="text-[12px] text-white/70 font-medium whitespace-nowrap shrink-0">
-        Scanning
-      </span>
-
-      {/* Progress track + fill */}
-      <div
-        className="relative h-1.5 rounded-full overflow-hidden shrink-0"
-        style={{ width: 120, background: 'rgba(255,255,255,0.08)' }}
-      >
-        <div
-          className="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
-          style={{
-            width: `${pct}%`,
-            background: 'linear-gradient(90deg, #f59e0b, #7c6ef9)',
-          }}
-        />
-      </div>
-
-      {/* Count */}
-      <span className="text-[11px] text-white/45 font-mono whitespace-nowrap shrink-0">
-        {progress.scanned}/{progress.total}
-      </span>
-
-      {/* Cancel */}
-      <button
-        type="button"
-        onClick={onCancel}
-        className="shrink-0 flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors"
+      {/* Animated pulsing dot */}
+      <span
         style={{
-          color: '#fca5a5',
-          border: '0.5px solid rgba(248,113,113,0.25)',
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: completed ? '#4ecf8e' : '#f0a030',
+          animation: completed ? 'none' : 'pulse 1.2s ease-in-out infinite',
+          flexShrink: 0,
         }}
-        title="Stop after current batch"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
-        </svg>
-        Cancel
-      </button>
+      />
+
+      {/* Label text */}
+      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+        {completed ? 'Relevance scores ready' : 'Scanning relevance scores'}
+      </span>
+
+      {/* Progress count */}
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+        {scanned}/{total}
+      </span>
+
+      {/* Cancel button — only while running */}
+      {running && (
+        <span
+          onClick={(e) => { e.stopPropagation(); onCancel?.() }}
+          style={{
+            fontSize: 11,
+            color: 'rgba(255,255,255,0.35)',
+            cursor: 'pointer',
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            lineHeight: 'inherit',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}
+        >
+          × Cancel
+        </span>
+      )}
     </div>
   )
 }
