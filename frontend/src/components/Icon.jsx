@@ -201,3 +201,14 @@ export function DownloadIcon(props) {
     </svg>
   )
 }
+
+/** Brain/AI — used for the LLM model status / warmup button. */
+export function BrainIcon(props) {
+  return (
+    <svg {...base} width="18" height="18" {...props}>
+      <path d="M9 3a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 1.5 4.5A2.5 2.5 0 0 0 9 21V3Z" />
+      <path d="M15 3a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-1.5 4.5A2.5 2.5 0 0 1 15 21V3Z" />
+      <path d="M9 8h1.5M13.5 8H15M9 12h1.5M13.5 12H15M9 16h1.5M13.5 16H15" />
+    </svg>
+  )
+}

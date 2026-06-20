@@ -32,13 +32,13 @@ prompt() { echo -n "${DIM}$*${RST} "; }
 # ─── banner ─────────────────────────────────────────────────────────────────
 cat <<'BANNER'
 
-     __  __            _     ____                   _
-    |  \/  | _____   _(_) __|  _ \ _ __ ___  ___ __| |
-    | |\/| |/ _ \ \ / / |/ _` |_) | '__/ _ \/ __/ _` |
-    | |  | | (_) \ V /| | (_|  __/| | |  __/ (_| (_| |
-    |_|  |_|\___/ \_/ |_|\__,_\___|_|  \___|\___\__,_|
+    __  ___      _ ____  ____           __
+   /  |/  /___ _(_) /  |/  (_)___  ____/ /
+  / /|_/ / __ `/ / / /|_/ / / __ \/ __  /
+ / /  / / /_/ / / / /  / / / / / /_/ /
+/_/  /_/\__,_/_/_/_/  /_/_/_/ /_/\__,_/
 
-           AI-Powered Email Triage • Bootstrap Installer
+       AI-Powered Email Triage . Bootstrap Installer
 
 BANNER
 
@@ -226,10 +226,10 @@ if [[ -n "${CHOSEN_MODEL:-}" ]] || command -v ollama >/dev/null 2>&1; then
   echo
   echo "${BOLD}  Choose an LLM model for email triage:${RST}"
   echo
-  echo "  ${CYAN}1)${RST} Gemma 4 E2B (default, efficient & fast)"
-  echo "  ${CYAN}2)${RST} Llama 3.1 8B       (more capable, ~4.7 GB)"
-  echo "  ${CYAN}3)${RST} Qwen2.5 3B          (lighter & faster, ~1.9 GB)"
-  echo "  ${CYAN}4)${RST} TinyLlama 1.1B      (very light, ~638 MB)"
+  echo "  ${CYAN}1)${RST} Gemma 4 E2B   (default, efficient & fast)"
+  echo "  ${CYAN}2)${RST} Llama 3.1 8B   (more capable, ~4.7 GB)"
+  echo "  ${CYAN}3)${RST} Qwen2.5 3B     (lighter & faster, ~1.9 GB)"
+  echo "  ${CYAN}4)${RST} TinyLlama 1.1B (very light, ~638 MB)"
   echo "  ${CYAN}5)${RST} Skip — I'll choose a model later"
   echo
   prompt "  Enter choice [1-5]"

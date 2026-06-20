@@ -258,6 +258,45 @@ def _generate(model: str, base_url: str, prompt: str,
 
 
 # ---------------------------------------------------------------------------
+# Model warmup — preload the model into RAM so the first real scan is fast.
+# ---------------------------------------------------------------------------
+def warmup_model(model: str, base_url: str, timeout: float = 180.0) -> dict[str, Any]:
+    """Send a trivial prompt to load ``model`` into Ollama's RAM.
+
+    Returns ``{"ok": bool, "model": str, "error": str | None}``. The call can
+    take a while the first time (model weights load from disk), hence the long
+    timeout. Raises nothing — callers just read ``ok``.
+    """
+    base = base_url.rstrip("/")
+    try:
+        resp = httpx.post(
+            f"{base}/api/generate",
+            json={
+                "model": model,
+                "prompt": "ok",
+                "stream": False,
+                "keep_alive": "30m",
+                "options": {"num_predict": 1, "temperature": 0},
+            },
+            timeout=timeout,
+        )
+        if resp.status_code == 404:
+            return {
+                "ok": False,
+                "model": model,
+                "error": f"Model '{model}' not found on Ollama.",
+            }
+        resp.raise_for_status()
+        return {"ok": True, "model": model, "error": None}
+    except httpx.ConnectError as exc:
+        return {"ok": False, "model": model, "error": f"Ollama unreachable: {exc}"}
+    except httpx.TimeoutException as exc:
+        return {"ok": False, "model": model, "error": f"Ollama timed out: {exc}"}
+    except Exception as exc:
+        return {"ok": False, "model": model, "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 def scan_email(email: dict[str, Any], *, model: str, base_url: str) -> TriageResult:

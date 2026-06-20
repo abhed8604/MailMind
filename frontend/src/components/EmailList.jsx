@@ -3,9 +3,9 @@ import EmailCard from './EmailCard'
 import { SearchIcon } from './Icon'
 
 const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'unread', label: 'Unread' },
   { id: 'important', label: 'Important' },
+  { id: 'unread', label: 'Unread' },
+  { id: 'all', label: 'All' },
   { id: 'starred', label: 'Starred' },
 ]
 
@@ -34,6 +34,7 @@ export default function EmailList({
   style,
   amoled,
   accountColorMap,
+  onOpenMenu,
 }) {
   const accountsById = useMemo(
     () => Object.fromEntries(accounts.map((a) => [a.id, a])),
@@ -47,14 +48,33 @@ export default function EmailList({
     >
       {/* Header: title + search */}
       <div className="px-3.5 pt-3 pb-2.5">
-        <h1 className="text-[14px] font-medium mb-2" style={{ color: 'rgba(255,255,255,0.80)' }}>
-          {VIEW_TITLES[view] || 'Inbox'}
-        </h1>
+        <div className="flex items-center gap-2 mb-2 min-w-0">
+          {/* Mobile hamburger — inline next to the title (hidden on desktop) */}
+          {onOpenMenu && (
+            <button
+              type="button"
+              className="mm-list-hamburger shrink-0"
+              aria-label="Open menu"
+              title="Open menu"
+              onClick={onOpenMenu}
+            >
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
+          <h1 className="text-[14px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>
+            {VIEW_TITLES[view] || 'Inbox'}
+          </h1>
+        </div>
         <SearchBar value={query} onChange={onQuery} />
       </div>
 
       {/* Filter pills */}
-      <div className="flex gap-1 px-3.5 pb-2">
+      <div className="flex gap-1 px-3.5 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {FILTERS.map((f) => {
           const active = filter === f.id
           return (
@@ -77,8 +97,8 @@ export default function EmailList({
       {/* Divider below tabs */}
       <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)' }} />
 
-      {/* Scrollable email list */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Scrollable email list — re-mounts on filter change to trigger animation */}
+      <div key={filter} className="flex-1 overflow-y-auto email-list-enter">
         {error && (
           <div
             className="mx-2 mt-2 px-3 py-2 text-[12px] rounded-lg"
@@ -138,14 +158,14 @@ export default function EmailList({
 function SearchBar({ value, onChange }) {
   return (
     <div
-      className="flex items-center rounded-lg"
+      className="flex items-center rounded-lg min-w-0"
       style={{
         background: 'rgba(255,255,255,0.06)',
         border: '0.5px solid rgba(255,255,255,0.09)',
         padding: '6px 10px',
       }}
     >
-      <span className="mr-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+      <span className="mr-2 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>
         <SearchIcon />
       </span>
       <input
@@ -153,9 +173,10 @@ function SearchBar({ value, onChange }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search mail..."
-        className="bg-transparent flex-1 text-[12px] placeholder:opacity-100 focus:outline-none"
+        className="bg-transparent flex-1 min-w-0 text-[12px] placeholder:opacity-100 focus:outline-none"
         style={{
           color: 'rgba(255,255,255,0.80)',
+          minWidth: 0,
           // placeholder color set via inline style for consistency
         }}
       />

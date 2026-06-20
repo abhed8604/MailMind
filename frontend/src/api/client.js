@@ -45,6 +45,12 @@ export const getSyncStatus = () =>
 export const testTriageConnection = () =>
   api.get('/triage/connection').then((r) => r.data)
 
+export const warmupModel = (background = true) =>
+  api.post('/triage/warmup', null, { params: { background } }).then((r) => r.data)
+
+export const getModelStatus = () =>
+  api.get('/triage/model-status').then((r) => r.data)
+
 export const startScan = ({ background = true, rescan = false, limit } = {}) =>
   api.post('/triage/scan', null, {
     params: { background, rescan, ...(limit ? { limit } : {}) },

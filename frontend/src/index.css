@@ -156,10 +156,124 @@ body {
   50%      { opacity: 0.3; }
 }
 
+/* --- Pulsing dot (LLM model loading indicator) ------------------------- */
+@keyframes mmPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.85); }
+}
+
+/* --- Email list fade-slide on tab switch -------------------------------- */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.email-list-enter { animation: fadeSlideIn 0.18s ease-out; }
+
+/* --- Mobile responsive -------------------------------------------------- */
+/* Mobile-only drawer close button + inline hamburger: hidden on desktop. */
+.mobile-drawer-close { display: none; }
+.mm-list-hamburger { display: none; }
+
+@media (max-width: 767px) {
+  .app-shell { border-radius: 0; }
+
+  /* Sidebar drawer overlay backdrop */
+  .mobile-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 90;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  /* Sidebar as a slide-in drawer */
+  .mobile-sidebar-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 91;
+    transform: translateX(0);
+    animation: slideInLeft 0.2s ease-out;
+  }
+
+  /* Inline hamburger next to the Inbox title */
+  .mm-list-hamburger {
+    display: flex;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 0.5px solid rgba(255, 255, 255, 0.09);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.72);
+    transition: color 0.15s ease;
+  }
+  .mm-list-hamburger:hover { color: rgba(255, 255, 255, 1); }
+
+  /* Hide desktop resize divider */
+  .resize-divider { display: none !important; }
+
+  /* Close button inside the mobile drawer sidebar */
+  .mobile-drawer-close {
+    display: flex !important;
+    width: 34px;
+    height: 34px;
+    margin: 0 auto 6px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+  }
+
+  /* Full-screen reader overlay on mobile */
+  .mobile-reader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: #1a1a2e;
+    animation: slideInRight 0.22s ease-out;
+  }
+  .mobile-reader-overlay.amoled { background: #000000; }
+
+  /* Tighter padding in email reader on mobile to maximize content width.
+     !important is required to override the inline styles set by EmailReader. */
+  .mobile-reader-overlay .mm-email-meta { margin-left: 10px !important; margin-right: 10px !important; margin-top: 10px !important; }
+  .mobile-reader-overlay .mm-email-body { padding: 10px 12px !important; }
+  .mobile-reader-overlay .mm-email-body pre,
+  .mobile-reader-overlay .mm-email-body .email-body { font-size: 13px !important; line-height: 1.65 !important; }
+  /* Slightly reduce the reader toolbar padding on mobile so action icons fit. */
+  .mobile-reader-overlay aside > div:first-child { padding-left: 10px !important; padding-right: 10px !important; }
+  /* Reply bar: tighter on mobile */
+  .mobile-reader-overlay aside > div:last-child { padding-left: 10px !important; padding-right: 10px !important; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
 /* --- Reduced motion ---------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
   .spinner { animation: none; }
+  .email-list-enter { animation: none; }
+  .mobile-drawer-backdrop,
+  .mobile-sidebar-drawer,
+  .mobile-reader-overlay { animation: none; }
   * { transition: none !important; animation: none !important; }
 }
 

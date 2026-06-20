@@ -28,6 +28,26 @@ _SCAN_STATE: dict[str, Any] = {
 # batches). Cleared at the start of each new scan.
 _CANCEL_FLAG = threading.Event()
 
+# Model warmup state — tracked so the frontend can show loading/ready/unavailable.
+# ``status`` is one of: "unknown" | "loading" | "ready" | "unavailable".
+_WARMUP_LOCK = threading.Lock()
+_WARMUP_STATE: dict[str, Any] = {
+    "status": "unknown",
+    "model": None,
+    "error": None,
+    "last_check": None,
+}
+
+
+def _set_warmup(**kw) -> None:
+    with _WARMUP_LOCK:
+        _WARMUP_STATE.update(kw)
+
+
+def get_warmup_state() -> dict[str, Any]:
+    with _WARMUP_LOCK:
+        return dict(_WARMUP_STATE)
+
 
 @router.get("/connection")
 def test_connection(db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -37,6 +57,67 @@ def test_connection(db: Session = Depends(get_db)) -> dict[str, Any]:
     result["configured_model"] = model
     result["model_available"] = model in result.get("models", [])
     return result
+
+
+@router.post("/warmup")
+def warmup_model(
+    background: bool = Query(True),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Preload the configured Ollama model into RAM.
+
+    Runs in the background by default so the request returns immediately while
+    the model loads (can take 10-60s on first load). The frontend polls
+    ``GET /triage/model-status`` to see when it's ready.
+    """
+    model = get_setting(db, "ollama_model")
+    base_url = get_setting(db, "ollama_base_url")
+
+    # Quick reachability check first — fail fast if Ollama is down.
+    probe = llm_triage.test_connection(base_url)
+    if not probe.get("ok"):
+        _set_warmup(status="unavailable", model=model, error=probe.get("error"))
+        return {"status": "unavailable", "error": probe.get("error")}
+
+    def _do_warmup() -> None:
+        _set_warmup(status="loading", model=model, error=None)
+        result = llm_triage.warmup_model(model, base_url)
+        if result.get("ok"):
+            _set_warmup(status="ready", model=model, error=None)
+        else:
+            _set_warmup(status="unavailable", model=model, error=result.get("error"))
+
+    if background:
+        threading.Thread(target=_do_warmup, daemon=True).start()
+        _set_warmup(status="loading", model=model, error=None)
+        return {"status": "started"}
+    _do_warmup()
+    return get_warmup_state()
+
+
+@router.get("/model-status")
+def model_status(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Report the current model warmup state plus whether the configured model
+    is installed on Ollama.
+
+    ``status``: ``unknown`` | ``loading`` | ``ready`` | ``unavailable``
+    """
+    model = get_setting(db, "ollama_model")
+    base_url = get_setting(db, "ollama_base_url")
+    state = get_warmup_state()
+    # If we've never warmed up, do a cheap live check so the indicator reflects
+    # reality (Ollama up + model installed => "ready" once a real call succeeds).
+    if state.get("status") == "unknown":
+        probe = llm_triage.test_connection(base_url)
+        if not probe.get("ok"):
+            state = {"status": "unavailable", "model": model, "error": probe.get("error")}
+        elif model in probe.get("models", []):
+            state = {"status": "ready", "model": model, "error": None}
+        else:
+            state = {"status": "unavailable", "model": model,
+                     "error": f"Model '{model}' not installed on Ollama."}
+        _set_warmup(**state)
+    return state
 
 
 @router.post("/scan")

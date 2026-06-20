@@ -140,6 +140,47 @@ def _reconnect_accounts() -> None:
         threading.Thread(target=_bg_sync, daemon=True).start()
 
 
+def _warmup_llm_model() -> None:
+    """Preload the configured Ollama model into RAM at startup.
+
+    Best-effort: if Ollama isn't running or the model isn't installed we just
+    log and move on — the UI status indicator will reflect the state and the
+    user can retry from the sidebar. Runs in a background thread so startup is
+    never blocked by the (potentially slow) model load.
+    """
+    from . import llm_triage
+    from .routes.triage import _set_warmup
+
+    def _bg_warmup() -> None:
+        try:
+            with SessionLocal() as db:
+                model = get_setting(db, "ollama_model")
+                base_url = get_setting(db, "ollama_base_url")
+            probe = llm_triage.test_connection(base_url)
+            if not probe.get("ok"):
+                _set_warmup(status="unavailable", model=model, error=probe.get("error"))
+                log.info("Ollama not running at startup — triage will warm up on demand.")
+                return
+            if model not in probe.get("models", []):
+                _set_warmup(status="unavailable", model=model,
+                            error=f"Model '{model}' not installed on Ollama.")
+                log.warning("Configured model '%s' not installed on Ollama.", model)
+                return
+            _set_warmup(status="loading", model=model, error=None)
+            log.info("Warming up LLM model '%s'…", model)
+            result = llm_triage.warmup_model(model, base_url)
+            if result.get("ok"):
+                _set_warmup(status="ready", model=model, error=None)
+                log.info("LLM model '%s' is ready.", model)
+            else:
+                _set_warmup(status="unavailable", model=model, error=result.get("error"))
+                log.warning("LLM warmup failed: %s", result.get("error"))
+        except Exception:
+            log.exception("LLM warmup on startup failed; continuing.")
+
+    threading.Thread(target=_bg_warmup, daemon=True).start()
+
+
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
@@ -165,6 +206,11 @@ async def lifespan(app: FastAPI):
         _reconnect_accounts()
     except Exception:
         log.exception("Account reconnect on startup failed; continuing.")
+
+    # Preload the configured LLM model into RAM so the first scan is fast and
+    # new mail is triaged without a cold-start delay. Runs in the background —
+    # startup never blocks on model loading (which can take 10-60s).
+    _warmup_llm_model()
 
     yield
     log.info("MailMind backend shutting down…")

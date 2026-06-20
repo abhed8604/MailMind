@@ -16,11 +16,19 @@ touches your machine and Gmail's own API.
 - **Local LLM triage** — each email is classified by a local model
   (`hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` by default) into
   `important` + a category (`action_required`, `deadline`, `financial`,
-  `personal`, `newsletter`, `spam`, `other`), with a 0–10 score and a one-line
-  reason.
+  `personal`, `newsletter`, `spam`, `other`), with a 0–10 score, a one-line
+  reason, and an **AI summary** shown above the email body.
+- **Auto model warmup** — the configured LLM model is preloaded into RAM at
+  startup so the first scan is instant. A live status indicator in the sidebar
+  (green/amber/red dot) shows whether the model is ready, loading, or
+  unavailable — click it to manually start or reload.
 - **Custom triage rules** — write your own importance rules in plain Markdown
   (editable from Settings). They're prepended to the triage prompt so the model
   applies your criteria before classifying each email.
+- **Robust scan pipeline** — scans up to 500 emails per pass, retries once
+  after 30s if Ollama is unavailable, and marks parse errors as scanned (so
+  emails don't re-queue forever). A floating progress bar with cancel button
+  tracks the scan in real time.
 - **Incremental sync** — first connect fetches your last N emails; afterwards a
   background job uses Gmail's `historyId` to pull only what changed every few
   minutes.
@@ -29,15 +37,14 @@ touches your machine and Gmail's own API.
   re-authentication needed unless you revoke access.
 - **Encrypted token storage** — OAuth tokens are Fernet-encrypted at rest in
   `~/.mailmind/accounts.json`; the encryption key lives in your OS keyring.
+- **Responsive UI** — flat dark three-panel shell (sidebar / resizable list /
+  reader) on desktop, full-screen panels with drawer sidebar on mobile (<768px).
+  Tab switching uses fade-slide animation.
 - **Single-command launcher** — `./mailmind` builds the frontend once and serves
   everything (API + UI) from one process on a single port.
 - **Demo mode** — seed the UI with ~30 realistic mock emails so you can explore
   it before connecting real accounts or pulling a model (auto-disables once you
   connect a real account).
-- **Liquid-glass UI** — a three-panel resizable shell (rail / list / reader)
-  with a glassmorphic dark theme: translucent surfaces that refract ambient
-  color orbs, hover/selected row effects, a floating scan-progress bar with
-  cancel, skeleton loaders, and toast notifications.
 
 ---
 
@@ -83,8 +90,8 @@ The installer will prompt you for:
 - **Install location** — where to clone MailMind (defaults to `~/MailMind`).
 - **Ollama** — installs it if missing (Linux: `ollama.com` installer; macOS:
   Homebrew if available).
-- **LLM model** — pick from a menu: Qwen3-4B (default), Llama 3.1 8B, Qwen2.5
-  3B, TinyLlama 1.1B, or skip and pull later.
+- **LLM model** — pick from a menu: Gemma 4 E2B (default), Llama 3.1 8B,
+  Qwen2.5 3B, TinyLlama 1.1B, or skip and pull later.
 - **`credentials.json`** — paste your Google OAuth Desktop JSON directly, or
   skip and add it later at `backend/credentials.json`.
 - **Launch** — start the app immediately via `./mailmind`, or exit and run it
@@ -119,7 +126,7 @@ behalf.
 
 #### 2. Install dependencies
 
-The first run of `start.sh` installs everything, but you can do it manually:
+The first run of `./mailmind` installs everything, but you can do it manually:
 
 ```bash
 # Backend
@@ -167,9 +174,13 @@ needed, and incremental sync resumes within seconds.
 
 ### 5. Run triage
 
+The LLM model is **automatically warmed up at startup** so it's ready to scan.
 Click **⚡ Scan for Important** above the inbox (or the scheduler does it
 automatically after each sync if **Auto-scan** is on). Switch to the
 **Important** tab to see results sorted by score.
+
+If the model isn't ready, the **brain icon** in the sidebar shows a pulsing
+amber dot — click it to start/reload the model manually.
 
 ---
 
@@ -178,14 +189,14 @@ automatically after each sync if **Auto-scan** is on). Switch to the
 ```
 mailmind/
 ├── backend/
-│   ├── main.py              # FastAPI app, CORS, startup/lifespan
+│   ├── main.py              # FastAPI app, CORS, startup/lifespan, LLM warmup
 │   ├── accounts.py          # OAuth2 flow, encrypted token storage
 │   ├── gmail_sync.py        # Gmail fetch + incremental sync + backoff
 │   ├── database.py          # SQLAlchemy models, settings store
 │   ├── security.py          # Fernet via OS keyring, accounts.json
 │   ├── scheduler.py         # APScheduler background sync
-│   ├── llm_triage.py        # Ollama client + prompt + JSON parsing
-│   ├── triage_runner.py     # DB <-> LLM bridge (batch scans)
+│   ├── llm_triage.py        # Ollama client + prompt + JSON parsing + warmup
+│   ├── triage_runner.py     # DB <-> LLM bridge (batch scans, 500 limit, retry)
 │   ├── triage_rules.py      # User-editable markdown triage rules
 │   ├── mock_data.py         # Demo-mode seed data
 │   ├── smoke_test.py        # Live triage pipeline test
@@ -193,21 +204,37 @@ mailmind/
 │       ├── emails.py        # /emails list/detail/patch
 │       ├── accounts.py      # /accounts + OAuth start
 │       ├── sync.py          # /sync + /sync/status
-│       ├── triage.py        # /triage scan/rescan/connection
+│       ├── triage.py        # /triage scan/rescan/warmup/model-status
 │       └── settings.py      # /settings get/put + clear-data
 ├── frontend/
 │   ├── public/favicon.svg   # MailMind logo (envelope + AI spark)
 │   └── src/
-│       ├── App.jsx          # Shell, routing, triage orchestration
-│       ├── index.css        # Glassmorphic theme primitives + effects
-│       ├── components/      # Sidebar, EmailList/Card/Reader, Settings,
-│       │                    # ScanProgressBar, Icon, SearchBar, Toast…
-│       ├── hooks/           # useEmails, useSync
-│       ├── api/client.js    # Axios wrapper for every endpoint
-│       └── lib/             # categories.js, company.js (sender→brand)
+│       ├── App.jsx          # Shell, desktop 3-panel + mobile responsive layout
+│       ├── index.css        # Flat dark theme, responsive media queries
+│       ├── components/
+│       │   ├── Sidebar.jsx       # 48px icon rail, LLM status indicator
+│       │   ├── EmailList.jsx     # Filterable email list with tab pills
+│       │   ├── EmailCard.jsx     # Single email row (sender, preview, score, star)
+│       │   ├── EmailReader.jsx   # Reading pane with AI summary + iframe body
+│       │   ├── Settings.jsx      # Flat dark settings panel
+│       │   ├── ScanProgressBar.jsx  # Floating scan progress pill
+│       │   ├── Icon.jsx          # SVG icon components (including BrainIcon)
+│       │   ├── Toast.jsx         # Toast notification system
+│       │   ├── SearchBar.jsx     # Search input component
+│       │   └── TriageBadge.jsx   # Category/relevance badge
+│       ├── hooks/
+│       │   ├── useEmails.js      # Email fetching, pagination, toggle read/star
+│       │   ├── useSync.js        # WebSocket sync events
+│       │   ├── useResizable.js   # Drag-to-resize list/reader divider
+│       │   └── useIsMobile.js    # Viewport breakpoint detection (< 768px)
+│       ├── api/
+│       │   └── client.js        # Axios wrapper for all backend endpoints
+│       └── lib/
+│           ├── categories.js     # Triage category metadata + score badge styles
+│           └── company.js        # Email domain → brand color mapping
 ├── start.sh                 # Dev launcher (backend :8000 + Vite :5173)
 ├── mailmind                 # Single-command launcher (build + serve on :8000)
-├── install.sh               # One-shot bootstrap installer (clone + deps + Ollama + wizard)
+├── install.sh               # One-shot bootstrap installer
 ├── requirements.txt
 └── README.md
 ```
@@ -259,12 +286,24 @@ Body: {body_text[:1500]}
 
 Respond with:
 {"important": true/false, "score": 0-10, "reason": "one sentence explanation",
- "category": "action_required|deadline|financial|personal|newsletter|spam|other"}
+ "category": "action_required|deadline|financial|personal|newsletter|spam|other",
+ "summary": "one paragraph summary of the email content"}
 ```
 
-The parser is defensive: it strips ```` ```json ```` fences, falls back to a
+The parser is defensive: it strips `` ```json `` fences, falls back to a
 regex `{...}` extraction, and clamps/sanitizes every field — so an occasionally
 chatty model never breaks the pipeline. Results are stored on the email row.
+
+### Model warmup & status
+
+On every startup, MailMind probes Ollama and preloads the configured model into
+RAM in a background thread. The **brain icon** in the sidebar reflects the status:
+
+| Dot color | Meaning | Action |
+|-----------|---------|--------|
+| 🟢 Green | Model ready | Scan will be fast. |
+| 🟡 Amber (pulsing) | Model loading | Wait or click to reload. |
+| 🔴 Red | Ollama unavailable / model not installed | Start Ollama or check model name in Settings. |
 
 ### Custom triage rules
 
@@ -284,10 +323,10 @@ These are injected verbatim at the top of every triage prompt. They persist at
 `~/.mailmind/triage_rules.md` and survive restarts.
 
 If Ollama is **not running**, triage features disable gracefully: the "Scan"
-button reports the outage via toast, the Test Connection panel says so
-explicitly, and the rest of the app keeps working. While a scan runs, a floating
-progress bar appears at the bottom of the screen showing live `scanned/total`
-counts with a **Cancel** button to stop after the current batch.
+button reports the outage via toast, the status indicator shows red, and the
+rest of the app keeps working. While a scan runs, a floating progress bar
+appears at the bottom of the screen showing live `scanned/total` counts with a
+**Cancel** button to stop after the current batch.
 
 ---
 
@@ -300,7 +339,10 @@ counts with a **Cancel** button to stop after the current batch.
 - **"needs reauth" badge** — your refresh token expired or was revoked. Remove
   the account in Settings and re-add it.
 - **Triage "Ollama unavailable"** — start Ollama (`ollama serve` or the desktop
-  app) and confirm the model is pulled (`ollama list`).
+  app) and confirm the model is pulled (`ollama list`). The brain icon in the
+  sidebar also lets you kick off a warmup.
+- **Model keeps unloading** — increase `OLLAMA_KEEP_ALIVE` before launching:
+  `OLLAMA_KEEP_ALIVE=30m ./mailmind`.
 - **Using a keyfile instead of a keyring** — on a headless box with no secret
   service, MailMind falls back to `~/.mailmind/master.key` (chmod 600) and logs
   a warning. For better security, install `gnome-keyring` or run a Secret
@@ -320,6 +362,7 @@ of the current schema/hooks:
 - Export Important emails as CSV/PDF
 - Triage history log table
 - Per-account sync pause toggle
+- Send / compose emails
 
 ---
 

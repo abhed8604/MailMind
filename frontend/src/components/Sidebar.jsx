@@ -1,29 +1,65 @@
 import {
-  MailIcon, ScanIcon, RescanIcon, DownloadIcon, SendIcon, StarIcon,
-  SettingsIcon,
+  MailIcon, ScanIcon, RescanIcon, DownloadIcon,
+  SettingsIcon, BrainIcon,
 } from './Icon'
+
+// Status dot colors for the LLM model indicator.
+const MODEL_STATUS_COLOR = {
+  ready: '#4ecf8e',
+  loading: '#f0a030',
+  unavailable: '#f87171',
+  unknown: 'rgba(255,255,255,0.25)',
+}
 
 /**
  * Panel 1 — narrow 48px icon sidebar.
  *
- * Top→down: mail, bolt/flash (scan), refresh (rescan), download (sync), send,
- * star. Bottom: connected-account dots (colored per-account, click to filter
- * that account; click again to clear), then the settings icon last.
+ * Top→down: mail, bolt/flash (scan), refresh (rescan), download (sync),
+ * brain (LLM model warmup + status). Bottom: connected-account dots
+ * (colored per-account, click to filter that account; click again to clear),
+ * then the settings icon last.
  */
 export default function Sidebar({
   view, onView,
   syncStatus, mockMode, scanRunning, onScan, onRescanAll, onSyncNow,
+  modelStatus, modelBusy, onWarmupModel,
   amoled,
   accounts = [],
   selectedAccount,
   onSelectAccount,
   accountColorMap,
+  onClose,
 }) {
+  const statusColor = MODEL_STATUS_COLOR[modelStatus] || MODEL_STATUS_COLOR.unknown
+  const warmupLabel = modelStatus === 'ready'
+    ? `Model ready${onWarmupModel ? ' — click to reload' : ''}`
+    : modelStatus === 'loading'
+      ? 'Model loading…'
+      : modelStatus === 'unavailable'
+        ? 'Model unavailable — click to start'
+        : 'Start LLM model'
+
   return (
     <aside
       className="w-[48px] shrink-0 h-full flex flex-col items-center py-3 overflow-hidden"
       style={{ background: amoled ? '#000000' : '#0e0e1a', borderRight: '1px solid rgba(255,255,255,0.06)' }}
     >
+      {/* Mobile close button — top of the drawer. Hidden on desktop (CSS). */}
+      {onClose && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          title="Close menu"
+          onClick={onClose}
+          className="mobile-drawer-close"
+        >
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </button>
+      )}
       {/* Top icon group */}
       <div className="flex flex-col items-center gap-1.5">
         <IconBtn label="Mail" active={view === 'inbox'} onClick={() => onView('inbox')}>
@@ -50,19 +86,29 @@ export default function Sidebar({
         >
           <DownloadIcon width={18} height={18} />
         </IconBtn>
+        {/* LLM model warmup + status indicator */}
         <IconBtn
-          label="Compose / Send"
-          onClick={() => onView('inbox')}
-          disabled
+          label={warmupLabel}
+          active={modelStatus === 'ready'}
+          onClick={onWarmupModel}
+          disabled={modelBusy || !onWarmupModel}
         >
-          <SendIcon width={18} height={18} />
-        </IconBtn>
-        <IconBtn
-          label="Starred"
-          active={view === 'starred'}
-          onClick={() => onView('starred')}
-        >
-          <StarIcon width={18} height={18} />
+          <BrainIcon width={18} height={18} />
+          {/* status dot — bottom-right of the icon */}
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              bottom: 5,
+              right: 5,
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: statusColor,
+              boxShadow: modelStatus === 'loading' ? '0 0 6px rgba(240,160,48,0.7)' : 'none',
+              animation: modelStatus === 'loading' ? 'mmPulse 1.2s ease-in-out infinite' : 'none',
+            }}
+          />
         </IconBtn>
       </div>
 
@@ -116,7 +162,7 @@ function IconBtn({ children, label, active, onClick, disabled }) {
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="h-[34px] w-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      className="relative h-[34px] w-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
         background: active ? 'rgba(91,141,239,0.18)' : 'transparent',
         color: active ? '#7eaaff' : 'rgba(255,255,255,0.28)',

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
   clearLocalData, deleteAccount, getAccounts, getSettings, startOAuth,
-  testTriageConnection, triggerAccountSync, updateSettings,
+  testTriageConnection, updateSettings,
   getTriageRules, updateTriageRules, switchModel,
 } from '../api/client'
 
 /**
- * Full settings surface, restyled to match the glassmorphic home page.
+ * Full settings surface — flat dark style matching the inbox panels.
  *
  * The icon sidebar rail is always visible (rendered by App.jsx), so this
  * component fills the area to the right of the rail. A back button in the
@@ -175,22 +175,23 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
       className="h-full overflow-y-auto min-w-0"
       style={{ background: amoled ? '#000000' : '#16162a', ...style }}
     >
-      {/* Back button — fixed to top-left of the viewport */}
-      <button
-        onClick={onBack}
-        title="Back to inbox"
-        aria-label="Back to inbox"
-        className="fixed top-3 left-[60px] z-50 h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:text-white"
-        style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.72)' }}
-      >
-        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
-
       <div className="px-3.5 py-3 space-y-2">
 
-        <h1 className="text-[14px] font-medium mb-2" style={{ color: 'rgba(255,255,255,0.80)' }}>Settings</h1>
+        {/* Header row: back button + title (inline, responsive) */}
+        <div className="flex items-center gap-2 mb-2">
+          <button
+            onClick={onBack}
+            title="Back to inbox"
+            aria-label="Back to inbox"
+            className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center transition-colors hover:text-white"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.72)' }}
+          >
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <h1 className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.80)' }}>Settings</h1>
+        </div>
 
         {/* AMOLED toggle */}
         <section className="rounded-lg px-3.5 py-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
@@ -372,7 +373,8 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
 function Section({ title, subtitle, children }) {
   return (
-    <section className="rounded-lg px-3.5 py-2.5 space-y-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+    <section className="rounded-lg px-3.5 py-2.5 space-y-2"
+      style={{ background: 'rgba(255,255,255,0.04)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
       <div>
         <h2 className="text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.88)' }}>{title}</h2>
         {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{subtitle}</p>}

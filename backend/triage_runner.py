@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import logging
+import time
 from typing import Any, Callable
 
 from sqlalchemy import select
@@ -22,7 +23,11 @@ log = logging.getLogger("mailmind.triage_runner")
 
 # Hard cap on how many emails a single scan/rescan will touch. Keeps runs
 # predictable and bounded; never-scanned emails are prioritized within the cap.
-MAX_SCAN_LIMIT = 100
+MAX_SCAN_LIMIT = 500
+
+# If Ollama becomes unavailable mid-scan, wait this long (seconds) and retry
+# the failing email once before aborting the whole run.
+UNAVAILABLE_RETRY_SECONDS = 30
 
 
 def _pick_emails(db: Session, *, rescan: bool, limit: int | None) -> list[Email]:
@@ -123,6 +128,31 @@ def run_triage_scan(
     cancelled = False
     last_error: str | None = None
 
+    def _mark_email(eid: int, *, result=None, reason: str | None = None) -> None:
+        """Persist a triage result (or an error placeholder) so the email is
+        not picked up again on every future scan."""
+        with SessionLocal() as db:
+            row = db.get(Email, eid)
+            if row is None:
+                return
+            if result is not None:
+                row.important = result.important
+                row.importance_score = result.score
+                row.importance_reason = result.reason
+                row.category = result.category
+                row.action_required = result.action_required
+                row.ai_summary = result.summary
+            elif reason:
+                # Record why we couldn't score it, but still mark it scanned so
+                # it doesn't block the queue forever.
+                row.importance_reason = reason
+                row.important = False
+                row.importance_score = 0
+                row.ai_summary = ""
+            row.scanned_at = _dt.datetime.now(_dt.timezone.utc)
+            row.scan_model = model
+            db.commit()
+
     for i in range(0, len(payloads), batch_size):
         # Soft-cancel: checked before starting each new batch.
         if cancel_check and cancel_check():
@@ -137,26 +167,48 @@ def run_triage_scan(
                 errors += 1
                 last_error = err
                 if err and "Ollama unavailable" in str(err):
-                    unavailable = True
+                    # Ollama went away mid-run — retry once after a short wait
+                    # before declaring the whole scan unavailable.
+                    log.warning(
+                        "Ollama unavailable for email %s — retrying in %ds…",
+                        eid, UNAVAILABLE_RETRY_SECONDS,
+                    )
+                    time.sleep(UNAVAILABLE_RETRY_SECONDS)
+                    try:
+                        payload = next((p for p in chunk if p.get("id") == eid), None)
+                        if payload is not None:
+                            result = llm_triage.scan_email(
+                                payload, model=model, base_url=base_url
+                            )
+                    except llm_triage.TriageUnavailable:
+                        unavailable = True
+                    except llm_triage.TriageParseError as exc:
+                        _mark_email(eid, reason=f"Parse error: {exc}")
+                        scanned += 1
+                        if on_progress:
+                            on_progress(scanned, total)
+                        continue
+                    except Exception as exc:  # pragma: no cover - defensive
+                        log.exception("Unexpected triage error for email %s", eid)
+                        _mark_email(eid, reason=f"Unexpected error: {exc}")
+                        scanned += 1
+                        if on_progress:
+                            on_progress(scanned, total)
+                        continue
+                    if result is None:
+                        unavailable = True
+                else:
+                    # Parse error or other per-email failure — record a
+                    # placeholder so the email doesn't keep getting re-picked.
+                    _mark_email(eid, reason=err or "Scan failed")
+                    scanned += 1
+                    if on_progress:
+                        on_progress(scanned, total)
+                    continue
                 if unavailable:
                     # Ollama is down — abort the run cleanly.
                     break
-                scanned += 1
-                if on_progress:
-                    on_progress(scanned, total)
-                continue
-            with SessionLocal() as db:
-                row = db.get(Email, eid)
-                if row is not None:
-                    row.important = result.important
-                    row.importance_score = result.score
-                    row.importance_reason = result.reason
-                    row.category = result.category
-                    row.action_required = result.action_required
-                    row.ai_summary = result.summary
-                    row.scanned_at = _dt.datetime.now(_dt.timezone.utc)
-                    row.scan_model = model
-                    db.commit()
+            _mark_email(eid, result=result)
             scanned += 1
             if result.important:
                 important += 1

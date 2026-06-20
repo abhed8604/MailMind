@@ -9,6 +9,28 @@ import {
   SendIcon, CloseIcon,
 } from './Icon'
 
+// Ensure all links in sanitized HTML open in a new tab.
+if (typeof DOMPurify.addHook === 'function') {
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName === 'A') {
+      node.setAttribute('target', '_blank')
+      node.setAttribute('rel', 'noopener noreferrer')
+    }
+  })
+}
+
+// Regex for detecting bare URLs in plain text and turning them into links.
+const URL_RE = /(?<!["'=])(https?:\/\/[^\s<>'")\]]+)/gi
+
+/**
+ * Linkify a plain-text string: wrap bare URLs in <a> tags that open in a
+ * new tab. Used for the <pre> fallback when there is no HTML body.
+ */
+function linkifyText(text) {
+  if (!text) return text
+  return text.replace(URL_RE, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+}
+
 /**
  * Panel 3 — reading pane (flex: 1).
  *
@@ -144,7 +166,7 @@ export default function EmailReader({
 
       {/* ---- EMAIL META BLOCK ---- */}
       <div
-        className="shrink-0 mx-4 mt-3"
+        className="shrink-0 mx-4 mt-3 mm-email-meta"
         style={{
           background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
           borderRadius: '8px',
@@ -207,16 +229,38 @@ export default function EmailReader({
         </div>
       </div>
 
+      {/* ---- AI SUMMARY ---- */}
+      {email.ai_summary && (
+        <div
+          className="shrink-0 mx-4 mt-3 mm-email-meta"
+          style={{
+            background: 'rgba(126, 170, 255, 0.06)',
+            border: '0.5px solid rgba(126, 170, 255, 0.12)',
+            borderRadius: '8px',
+            padding: '10px 14px',
+          }}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(126, 170, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              ✨ AI Summary
+            </span>
+          </div>
+          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.60)', lineHeight: '1.6', margin: 0 }}>
+            {email.ai_summary}
+          </p>
+        </div>
+      )}
+
       {/* ---- EMAIL BODY ---- */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: '20px 22px' }}>
+      <div className="flex-1 overflow-y-auto mm-email-body" style={{ padding: '20px 22px' }}>
         {bodyPending ? (
           <BodySkeleton />
         ) : cleanHtml ? (
           <EmailFrame html={cleanHtml} />
         ) : (
-          <pre className="email-body whitespace-pre-wrap" style={{ margin: 0 }}>
-            {email.body_text || '(no body)'}
-          </pre>
+          <pre className="email-body whitespace-pre-wrap" style={{ margin: 0 }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(linkifyText(email.body_text || '(no body)'), { USE_PROFILES: { html: true } }) }}
+          />
         )}
       </div>
 
@@ -323,17 +367,32 @@ function BodySkeleton() {
 /**
  * Renders email HTML inside a sandboxed iframe so the email's own <style> /
  * <body> rules can't leak out and override the app theme.
+ *
+ * Uses `srcDoc` (not contentDocument.write) and a sandbox WITHOUT
+ * `allow-same-origin`, so the iframe gets a unique opaque origin and truly
+ * cannot reach the parent document — no "sandbox escape" console warning.
+ * The iframe's height is measured via a small in-iframe <script> that posts
+ * its scrollHeight back to the parent through postMessage (only allow-scripts
+ * is granted, which is safe without allow-same-origin).
  */
 function EmailFrame({ html }) {
   const ref = useRef(null)
 
+  // Listening for the iframe's height reports.
   useEffect(() => {
-    const iframe = ref.current
-    if (!iframe) return
-    const doc = iframe.contentDocument
-    if (!doc) return
+    const onMessage = (ev) => {
+      const iframe = ref.current
+      if (!iframe || ev.source !== iframe.contentWindow) return
+      const h = Number(ev.data?.mailmindHeight)
+      if (h && h > 0) iframe.style.height = `${h + 4}px`
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
-    const wrapped = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  const srcDoc = useMemo(() => {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         :root { color-scheme: dark; }
         html, body {
@@ -342,32 +401,50 @@ function EmailFrame({ html }) {
           color: rgba(255,255,255,0.60);
           font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
           font-size: 13px; line-height: 1.75;
-          word-wrap: break-word;
+          word-wrap: break-word; overflow-wrap: anywhere;
         }
         a { color: #7eaaff; }
         img { max-width: 100%; height: auto; border-radius: 8px; }
         table { max-width: 100%; }
         pre { white-space: pre-wrap; word-wrap: break-word; }
-        * { max-width: 100%; }
+        * { max-width: 100%; box-sizing: border-box; }
         p { margin: 0 0 10px; }
         ul, ol { margin: 0 0 10px 18px; }
         li { margin-bottom: 3px; }
       </style>
-    </head><body>${html}</body></html>`
+    </head><body>${html}<script>
+      (function(){
+        var report=function(){
+          var h=Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+          parent.postMessage({mailmindHeight:h}, "*");
+        };
+        report();
+        if (document.readyState!=="complete"){
+          window.addEventListener("load", report);
+        }
+        setTimeout(report,100);
+        setTimeout(report,500);
+        if (typeof ResizeObserver!=="undefined"){
+          new ResizeObserver(report).observe(document.body);
+        }
+      })();
+    </script></body></html>`
+  }, [html])
 
-    doc.open()
-    doc.write(wrapped)
-    doc.close()
-
-    const resize = () => {
+  // Fallback height measurement (works even if in-iframe JS is blocked).
+  useEffect(() => {
+    const iframe = ref.current
+    if (!iframe) return
+    const fallback = () => {
       try {
-        const h = doc.documentElement.scrollHeight || doc.body.scrollHeight
-        iframe.style.height = `${h + 4}px`
-      } catch { /* ignore */ }
+        const d = iframe.contentDocument
+        if (!d) return
+        const h = d.documentElement.scrollHeight || d.body.scrollHeight
+        if (h) iframe.style.height = `${h + 4}px`
+      } catch { /* opaque origin — ignore, postMessage path covers it */ }
     }
-    resize()
-    const t1 = setTimeout(resize, 100)
-    const t2 = setTimeout(resize, 500)
+    const t1 = setTimeout(fallback, 200)
+    const t2 = setTimeout(fallback, 600)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [html])
 
@@ -375,7 +452,8 @@ function EmailFrame({ html }) {
     <iframe
       ref={ref}
       title="email body"
-      sandbox="allow-same-origin allow-popups"
+      srcDoc={srcDoc}
+      sandbox="allow-scripts allow-popups"
       className="w-full border-0"
       style={{ minHeight: 120, background: 'transparent' }}
     />
