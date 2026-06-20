@@ -42,7 +42,7 @@ export default function EmailList({
 
   return (
     <div
-      className="shrink-0 h-full flex flex-col min-w-0"
+      className="h-full flex flex-col min-w-0"
       style={{ background: amoled ? '#000000' : '#16162a', ...style }}
     >
       {/* Header: title + search */}

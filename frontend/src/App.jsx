@@ -202,6 +202,9 @@ function MailMind() {
   // Draggable divider between the list panel and the reading pane.
   const { leftPct, onPointerDown: onDividerDown, dragging } = useResizable({ initial: 38, min: 20, max: 70 })
 
+  // Whether the reading pane is visible — drives the slide-in/out animation.
+  const readerOpen = !!selectedEmail
+
   return (
     <div className={`app-shell${amoled ? ' amoled' : ''}`}>
       {/* 3-column flex layout */}
@@ -240,7 +243,13 @@ function MailMind() {
               page={page}
               onPageChange={setPage}
               view={view}
-              style={{ width: `${leftPct}%` }}
+              style={{
+                flex: `0 0 ${leftPct}%`,
+                transform: readerOpen ? 'translateX(0)' : `translateX(${(100 - leftPct) / (2 * leftPct) * 100}%)`,
+                transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
+                willChange: 'transform',
+              }}
               amoled={amoled}
               accountColorMap={accountColorMap}
             />
@@ -253,29 +262,49 @@ function MailMind() {
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize panels"
-            />
-            <EmailReader
-              email={selectedEmail}
-              account={selectedEmail ? accountsById[selectedEmail.account_id] : undefined}
-              bodyLoading={bodyLoading}
-              onToggleRead={toggleRead}
-              onToggleStar={toggleStar}
-              onClose={() => setSelectedEmail(null)}
-              onToast={toast}
-              onRescanned={onRescanned}
-              scanRunning={scanRunning}
-              scanProgress={scanProgress}
-              onCancelScan={async () => {
-                try {
-                  await cancelScan()
-                  toast.info('Cancel requested — will stop after current batch.')
-                } catch (e) {
-                  toast.error(`Cancel failed: ${e.message}`)
-                }
+              style={{
+                flex: `0 0 ${readerOpen ? 4 : 0}px`,
+                flexShrink: 0,
+                opacity: readerOpen ? 1 : 0,
+                overflow: 'hidden',
+                pointerEvents: readerOpen ? 'auto' : 'none',
+                transition: 'flex 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease',
               }}
-              amoled={amoled}
-              accountColorMap={accountColorMap}
             />
+            {/* Reading pane — slides in from right when an email is selected.
+                Uses transform (GPU compositor) in sync with the list's transform
+                so both slide together as one smooth motion. */}
+            <div style={{
+              flex: `0 0 calc(${100 - leftPct}% - ${readerOpen ? 4 : 0}px)`,
+              transform: readerOpen ? 'translateX(0)' : 'translateX(100%)',
+              opacity: readerOpen ? 1 : 0,
+              overflow: 'hidden',
+              transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease',
+              willChange: 'transform',
+            }}>
+              <EmailReader
+                email={selectedEmail}
+                account={selectedEmail ? accountsById[selectedEmail.account_id] : undefined}
+                bodyLoading={bodyLoading}
+                onToggleRead={toggleRead}
+                onToggleStar={toggleStar}
+                onClose={() => setSelectedEmail(null)}
+                onToast={toast}
+                onRescanned={onRescanned}
+                scanRunning={scanRunning}
+                scanProgress={scanProgress}
+                onCancelScan={async () => {
+                  try {
+                    await cancelScan()
+                    toast.info('Cancel requested — will stop after current batch.')
+                  } catch (e) {
+                    toast.error(`Cancel failed: ${e.message}`)
+                  }
+                }}
+                amoled={amoled}
+                accountColorMap={accountColorMap}
+              />
+            </div>
           </>
         ) : (
           <Settings
@@ -285,6 +314,11 @@ function MailMind() {
             onAccountsChanged={refreshAccounts}
             amoled={amoled}
             onAmoledChange={handleAmoledChange}
+            style={{
+              flex: `0 0 ${leftPct}%`,
+              margin: '0 auto',
+            }}
+            accountColorMap={accountColorMap}
           />
         )}
       </div>

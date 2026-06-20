@@ -16,7 +16,7 @@ import {
  * (add account, test connection, clear data, switch model) are explicit
  * buttons.
  */
-export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged, amoled, onAmoledChange }) {
+export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged, amoled, onAmoledChange, style, accountColorMap }) {
   const [settings, setSettings] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [credentialsConfigured, setCredentialsConfigured] = useState(false)
@@ -164,7 +164,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
   if (!settings) {
     return (
-      <div className="flex-1 flex items-center justify-center text-timestamp text-[13px]">
+      <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
         Loading settings…
       </div>
     )
@@ -172,41 +172,35 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
   return (
     <div
-      className="flex-1 min-w-0 h-full overflow-y-auto"
-      style={{ background: amoled ? '#000000' : '#1a1a2e' }}
+      className="h-full overflow-y-auto min-w-0"
+      style={{ background: amoled ? '#000000' : '#16162a', ...style }}
     >
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      {/* Back button — fixed to top-left of the viewport */}
+      <button
+        onClick={onBack}
+        title="Back to inbox"
+        aria-label="Back to inbox"
+        className="fixed top-3 left-[60px] z-50 h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:text-white"
+        style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.72)' }}
+      >
+        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
 
-        {/* Header with back button */}
-        <header className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            title="Back to inbox"
-            aria-label="Back to inbox"
-            className="h-8 w-8 rounded-lg flex items-center justify-center transition-colors hover:text-white text-sender"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)' }}
-          >
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-[17px] font-medium text-primary">Settings</h1>
-            <p className="text-[12px] text-timestamp mt-0.5">Everything runs locally. No data leaves this machine.</p>
-          </div>
-        </header>
+      <div className="px-3.5 py-3 space-y-2">
 
-        {/* Appearance */}
-        <Section title="Appearance" subtitle="Display preferences.">
-          <Field label="AMOLED mode" sublabel="Pure black backgrounds for OLED screens">
-            <Toggle
-              label="AMOLED mode"
-              checked={!!amoled}
-              onChange={(v) => onAmoledChange?.(v)}
-              activeColor="#5B8DEF"
-            />
-          </Field>
-        </Section>
+        <h1 className="text-[14px] font-medium mb-2" style={{ color: 'rgba(255,255,255,0.80)' }}>Settings</h1>
+
+        {/* AMOLED toggle */}
+        <section className="rounded-lg px-3.5 py-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <Toggle
+            label="AMOLED mode"
+            checked={!!amoled}
+            onChange={(v) => onAmoledChange?.(v)}
+            activeColor="#5B8DEF"
+          />
+        </section>
 
         {/* Accounts */}
         <Section title="Gmail Accounts" subtitle="OAuth tokens are Fernet-encrypted in ~/.mailmind/accounts.json.">
@@ -216,30 +210,33 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               See the README to create Gmail OAuth Desktop credentials, then restart the backend.
             </Note>
           )}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: a.color }} />
+              <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: (accountColorMap && accountColorMap.get(a.id)?.color) || a.color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[13px] text-sender truncate">{a.email}</div>
-                  <div className="font-mono text-[11px] text-timestamp">
+                  <div className="font-mono text-[12px] truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>{a.email}</div>
+                  <div className="font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
                     {a.needs_reauth ? '⚠ needs re-auth' : a.last_synced_at ? `synced ${new Date(a.last_synced_at).toLocaleString()}` : 'never synced'}
                   </div>
                 </div>
                 <button
                   onClick={() => handleRemove(a.id, a.email)}
-                  className="text-[12px] text-timestamp hover:text-red-300 px-2 py-1 transition-colors"
+                  className="text-[11px] px-1.5 py-0.5 transition-colors"
+                  style={{ color: 'rgba(255,255,255,0.32)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#fca5a5' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.32)' }}
                 >
                   Remove
                 </button>
               </div>
             ))}
-            {accounts.length === 0 && <p className="text-[13px] text-timestamp">No accounts yet.</p>}
+            {accounts.length === 0 && <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>No accounts yet.</p>}
           </div>
           <button
             onClick={handleAddAccount}
             disabled={!credentialsConfigured || oauthRunning}
-            className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: '#f59e0b', color: '#0b0b12' }}
           >
             {oauthRunning ? 'Waiting for consent…' : '+ Add Gmail Account'}
@@ -269,9 +266,9 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               placeholder="gemma3:4b" className="input font-mono" />
           </Field>
           {/* Switch model: delete the current model and pull a new one */}
-          <div className="rounded-lg p-3.5 space-y-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <div className="text-[12px] text-subject">
-              Switch model (deletes <span className="font-mono text-sender">{settings.ollama_model || 'current'}</span> and pulls a new one)
+          <div className="rounded-lg px-3 py-2.5 space-y-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              Switch model (deletes <span className="font-mono" style={{ color: 'rgba(255,255,255,0.80)' }}>{settings.ollama_model || 'current'}</span> and pulls a new one)
             </div>
             <input
               value={pendingModel}
@@ -283,24 +280,27 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             <button
               onClick={handleSwitchModel}
               disabled={modelSwitching || !pendingModel.trim()}
-              className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#f59e0b', color: '#0b0b12' }}
             >
               {modelSwitching ? 'Pulling… (this can take minutes)' : 'Delete & Pull New Model'}
             </button>
           </div>
           <button onClick={handleTestConnection} disabled={busy === 'conn'}
-            className="px-3.5 py-2 rounded-lg text-[13px] text-sender hover:text-white transition-colors disabled:opacity-40"
-            style={{ border: '0.5px solid rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.04)' }}>
+            className="px-3 py-1.5 rounded-lg text-[12px] transition-colors disabled:opacity-40"
+            style={{ border: '0.5px solid rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.72)' }}
+            onMouseEnter={(e) => { if (busy !== 'conn') e.currentTarget.style.color = 'rgba(255,255,255,1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.72)' }}
+          >
             {busy === 'conn' ? 'Testing…' : 'Test Connection'}
           </button>
           {conn && (
-            <div className={`mt-1 text-[13px] ${conn.ok ? 'text-emerald-300' : 'text-red-300'}`}>
+            <div className="mt-1 text-[12px]" style={{ color: conn.ok ? '#4ecf8e' : '#fca5a5' }}>
               {conn.ok
                 ? `Connected. ${conn.models.length} model(s) available${conn.model_available ? '' : ` — but "${conn.configured_model}" is not one of them. Run: ollama pull ${conn.configured_model}`}.`
                 : `Unreachable: ${conn.error}`}
               {conn.ok && conn.models.length > 0 && (
-                <div className="mt-1 font-mono text-[11px] text-timestamp">{conn.models.join(' · ')}</div>
+                <div className="mt-1 font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>{conn.models.join(' · ')}</div>
               )}
             </div>
           )}
@@ -322,20 +322,20 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           <textarea
             value={rules}
             onChange={(e) => { setRules(e.target.value); setRulesDirty(true) }}
-            rows={12}
-            className="input font-mono text-[12px] leading-relaxed resize-y"
+            rows={10}
+            className="input font-mono text-[11px] leading-relaxed resize-y"
             placeholder="Loading…"
           />
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveRules}
               disabled={!rulesDirty || rulesBusy}
-              className="px-3.5 py-2 rounded-full text-[13px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#f59e0b', color: '#0b0b12' }}
             >
               {rulesBusy ? 'Saving…' : 'Save Rules'}
             </button>
-            {rulesDirty && <span className="text-[11px] text-timestamp">Unsaved changes</span>}
+            {rulesDirty && <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>Unsaved changes</span>}
           </div>
         </Section>
 
@@ -343,7 +343,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
         <Section title="Data Management">
           <Toggle label="Demo mode (seed mock emails)" checked={settings.mock_mode} onChange={(v) => put({ mock_mode: v })} />
           <button onClick={handleClearData}
-            className="px-3.5 py-2 rounded-full text-[13px] transition-colors"
+            className="px-3 py-1.5 rounded-full text-[12px] transition-colors"
             style={{ border: '0.5px solid rgba(248,113,113,0.4)', color: '#fca5a5' }}>
             Clear Local Data
           </button>
@@ -357,9 +357,9 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           background: rgba(255,255,255,0.04);
           border: 0.5px solid rgba(255,255,255,0.09);
           border-radius: 8px;
-          padding: 9px 12px;
-          font-size: 13px;
-          color: rgba(255,255,255,0.88);
+          padding: 7px 10px;
+          font-size: 12px;
+          color: rgba(255,255,255,0.80);
           transition: border-color 0.15s ease;
         }
         .input::placeholder { color: rgba(255,255,255,0.3); }
@@ -372,10 +372,10 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
 function Section({ title, subtitle, children }) {
   return (
-    <section className="rounded-lg px-5 py-4 space-y-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
+    <section className="rounded-lg px-3.5 py-2.5 space-y-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
       <div>
-        <h2 className="text-[14px] font-medium text-primary">{title}</h2>
-        {subtitle && <p className="text-[12px] text-timestamp mt-0.5">{subtitle}</p>}
+        <h2 className="text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.88)' }}>{title}</h2>
+        {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -385,8 +385,8 @@ function Section({ title, subtitle, children }) {
 function Field({ label, sublabel, children }) {
   return (
     <label className="block">
-      <span className="block text-[13px] text-primary mb-0.5">{label}</span>
-      {sublabel && <span className="block text-[11px] text-timestamp mb-1.5">{sublabel}</span>}
+      <span className="block text-[11px] mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{label}</span>
+      {sublabel && <span className="block text-[10px] mb-1.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{sublabel}</span>}
       {children}
     </label>
   )
@@ -404,7 +404,7 @@ function Toggle({ label, checked, onChange, activeColor }) {
   const trackColor = activeColor || '#f59e0b'
   return (
     <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => onChange(!checked)}>
-      <span className="text-[13px] text-sender">{label}</span>
+      <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.80)' }}>{label}</span>
       <span
         className="relative h-5 w-9 rounded-full block pointer-events-none"
         style={{ background: checked ? trackColor : 'rgba(255,255,255,0.12)' }}
@@ -422,5 +422,5 @@ function Note({ kind = 'info', children }) {
   const styles = kind === 'warn'
     ? { border: '0.5px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.06)', color: '#fcd34d' }
     : { border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.55)' }
-  return <div className="text-[13px] rounded-lg px-3 py-2" style={styles}>{children}</div>
+  return <div className="text-[11px] rounded-lg px-2.5 py-1.5" style={styles}>{children}</div>
 }
