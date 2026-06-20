@@ -7,9 +7,15 @@ venv/
 .pytest_cache/
 
 # Node / frontend
+node_modules/
 frontend/node_modules/
 frontend/dist/
 *.log
+
+# TLS certificates — generated at runtime by ./mailmind (mkcert or openssl).
+# Never commit; each machine needs its own cert with the correct LAN IP.
+frontend/cert.pem
+frontend/key.pem
 
 # MailMind runtime data (NEVER commit — contains secrets / user data)
 .mailmind/

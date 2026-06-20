@@ -1,11 +1,12 @@
 # MailMind
 
-A local-first desktop web app that aggregates **multiple Gmail accounts** into a
+A local-first web app that aggregates **multiple Gmail accounts** into a
 single unified inbox and uses a **local LLM (Ollama)** to surface the emails
 that actually matter.
 
-Everything runs on `localhost`. No cloud, no telemetry — your mail only ever
-touches your machine and Gmail's own API.
+Everything runs on your machine. No cloud, no telemetry — your mail only ever
+touches your machine and Gmail's own API. Serve it over **LAN/HTTPS** and open
+it on any phone or tablet as an **installable PWA**.
 
 ---
 
@@ -37,9 +38,16 @@ touches your machine and Gmail's own API.
   re-authentication needed unless you revoke access.
 - **Encrypted token storage** — OAuth tokens are Fernet-encrypted at rest in
   `~/.mailmind/accounts.json`; the encryption key lives in your OS keyring.
-- **Responsive UI** — flat dark three-panel shell (sidebar / resizable list /
-  reader) on desktop, full-screen panels with drawer sidebar on mobile (<768px).
-  Tab switching uses fade-slide animation.
+- **Installable PWA + LAN access** — `./mailmind` binds to `0.0.0.0` over HTTPS
+  (trusted cert via `mkcert`), so you can open MailMind on any device on your
+  WiFi and **Add to Home Screen** to get a standalone app — not a browser
+  shortcut. Includes a proper web manifest, maskable icons, and a service
+  worker for offline shell caching.
+- **Polished mobile experience** — responsive shell that collapses to
+  full-screen panels (<768px) with: drawer sidebar, pull-to-refresh on the
+  inbox, hardware-back-button handling that closes overlays instead of exiting
+  the PWA, safe-area insets for notch / home indicator, AMOLED-black theme, and
+  the **MailMind** wordmark at the top of the home screen.
 - **Single-command launcher** — `./mailmind` builds the frontend once and serves
   everything (API + UI) from one process on a single port.
 - **Demo mode** — seed the UI with ~30 realistic mock emails so you can explore
@@ -55,11 +63,24 @@ touches your machine and Gmail's own API.
 | Python | 3.11+ (tested 3.14)| Backend                                          |
 | Node   | 18+ (tested 22)    | Frontend build (one-time; not needed at runtime) |
 | Ollama | any recent         | Local LLM runtime — `ollama.com`                 |
+| mkcert | any recent         | **Optional** — trusted HTTPS certs so the PWA installs warning-free. The launcher auto-installs it if missing. |
 
 Install Ollama and pull the default model:
 
 ```bash
 ollama pull hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS   # one-time
+```
+
+For trusted HTTPS on your LAN (recommended for phone/PWA use), install mkcert:
+
+```bash
+# Linux (installs to ~/.local/bin and adds the CA to trust store)
+curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64"
+chmod +x mkcert-*. && mkdir -p ~/.local/bin && mv mkcert-* ~/.local/bin/mkcert
+mkcert -install
+
+# macOS
+brew install mkcert && mkcert -install
 ```
 
 ---
@@ -144,9 +165,18 @@ cd frontend && npm install && cd ..
 ```
 
 This is the **single command**: it ensures the Python venv + deps are installed,
-builds the frontend once (cached afterward), then starts **one** uvicorn process
-that serves both the API and the built UI on `http://localhost:8000`, and opens
-your browser.
+builds the frontend once (cached afterward), generates a TLS certificate
+(via `mkcert` if installed, else a self-signed fallback), then starts **one**
+uvicorn process that serves both the API and the built UI over **HTTPS** on
+`:8000` and opens your browser.
+
+It prints both URLs on startup:
+
+```
+✓ MailMind running at https://localhost:8000
+  LAN: https://192.168.x.x:8000
+  (open on other devices via the LAN address above)
+```
 
 > **Dev mode** (with Vite hot-reload): `./mailmind --dev` — runs the backend on
 > `:8000` and Vite on `:5173` (API requests proxy through to the backend).
@@ -184,6 +214,69 @@ amber dot — click it to start/reload the model manually.
 
 ---
 
+## Mobile, PWA & LAN access
+
+MailMind is a fully **installable PWA** — on a phone it runs as a standalone
+app (its own window, no browser chrome), not a bookmark. Because installable
+PWAs require HTTPS, the launcher serves over TLS by default.
+
+### 1. Open on your phone
+
+1. Start the app on your machine (`./mailmind`) and note the **LAN address**
+   it prints (e.g. `https://192.168.1.41:8000`).
+2. Make sure your phone is on the **same WiFi**.
+3. Open that URL in Chrome / Safari. Accept the cert warning the first time
+   (see [Trusted certificates](#trusted-certificates-on-other-devices) below
+   to make it warning-free).
+
+> **Firewall**: if the phone can't connect, allow the port on the machine
+> running MailMind: `sudo ufw allow 8000`.
+
+### 2. Install as an app
+
+- **Android (Chrome):** open the menu → **Add to Home screen** (or tap the
+  install prompt in the address bar). It appears as a standalone icon and
+  opens in its own window.
+- **iOS (Safari):** tap **Share → Add to Home Screen**.
+- **Desktop (Chrome/Edge):** click the install icon in the address bar.
+
+The install works because the manifest advertises `display: standalone`, three
+icon sizes (including a **maskable** icon so it fills Android's adaptive
+shape), and the service worker provides offline shell caching.
+
+### 3. Mobile UX features
+
+- **Hardware back button** closes the open overlay (reader → drawer → settings)
+  before exiting the app — no accidental exits.
+- **Pull-to-refresh** on the inbox triggers a sync.
+- **Safe-area insets** — content clears the notch / status bar / home indicator.
+- **AMOLED-black theme** — toggle in Settings for true-black backgrounds.
+- **MailMind wordmark** at the top of the home screen.
+
+### Trusted certificates on other devices
+
+`mkcert` generates a cert trusted by the machine that ran it. For a
+warning-free experience on your phone, you need to trust mkcert's root CA on
+the phone too:
+
+```bash
+mkcert -CAROOT        # prints the folder containing rootCA.pem
+```
+
+- **Android:** Settings → Security → Encryption & credentials → Install a
+  certificate → CA certificate → pick `rootCA.pem`. (Exact menu names vary.)
+- **iOS:** AirDrop/email `rootCA.pem` to the phone, install the profile in
+  Settings, then enable it under Settings → General → About → Certificate
+  Trust Settings.
+
+Without this, the cert still works — you just get a one-time warning each time
+you open the app.
+
+> The cert and key (`frontend/cert.pem`, `frontend/key.pem`) are
+> `.gitignore`d — each machine generates its own with the correct LAN IP.
+
+---
+
 ## Project structure
 
 ```
@@ -207,13 +300,19 @@ mailmind/
 │       ├── triage.py        # /triage scan/rescan/warmup/model-status
 │       └── settings.py      # /settings get/put + clear-data
 ├── frontend/
-│   ├── public/favicon.svg   # MailMind logo (envelope + AI spark)
+│   ├── public/
+│   │   ├── favicon.svg       # MailMind logo (envelope + AI spark)
+│   │   ├── pwa-192x192.png   # PWA icon (any)
+│   │   ├── pwa-512x512.png   # PWA icon (any)
+│   │   └── maskable-512x512.png  # PWA icon (maskable — fills Android adaptive shape)
+│   ├── index.html            # viewport-fit=cover, Apple meta tags, theme-color
+│   ├── vite.config.js        # vite-plugin-pwa (manifest + Workbox runtime caching)
 │   └── src/
 │       ├── App.jsx          # Shell, desktop 3-panel + mobile responsive layout
-│       ├── index.css        # Flat dark theme, responsive media queries
+│       ├── index.css        # Flat dark theme, safe-area insets, AMOLED, brand bar
 │       ├── components/
 │       │   ├── Sidebar.jsx       # 48px icon rail, LLM status indicator
-│       │   ├── EmailList.jsx     # Filterable email list with tab pills
+│       │   ├── EmailList.jsx     # Filterable email list with tab pills + pull-to-refresh
 │       │   ├── EmailCard.jsx     # Single email row (sender, preview, score, star)
 │       │   ├── EmailReader.jsx   # Reading pane with AI summary + iframe body
 │       │   ├── Settings.jsx      # Flat dark settings panel
@@ -223,18 +322,21 @@ mailmind/
 │       │   ├── SearchBar.jsx     # Search input component
 │       │   └── TriageBadge.jsx   # Category/relevance badge
 │       ├── hooks/
-│       │   ├── useEmails.js      # Email fetching, pagination, toggle read/star
-│       │   ├── useSync.js        # WebSocket sync events
-│       │   ├── useResizable.js   # Drag-to-resize list/reader divider
-│       │   └── useIsMobile.js    # Viewport breakpoint detection (< 768px)
+│       │   ├── useEmails.js           # Email fetching, pagination, toggle read/star
+│       │   ├── useSync.js             # WebSocket sync events
+│       │   ├── useResizable.js        # Drag-to-resize list/reader divider
+│       │   ├── useIsMobile.js         # Viewport breakpoint detection (< 768px)
+│       │   ├── useMobileBackButton.js # Single hook: maps back button to overlay close
+│       │   ├── useSwipeToOpen.js      # Left-edge swipe to open the mobile drawer
+│       │   └── usePullToRefresh.js    # Pull-to-refresh on the mobile inbox
 │       ├── api/
 │       │   └── client.js        # Axios wrapper for all backend endpoints
 │       └── lib/
 │           ├── categories.js     # Triage category metadata + score badge styles
 │           └── company.js        # Email domain → brand color mapping
-├── start.sh                 # Dev launcher (backend :8000 + Vite :5173)
-├── mailmind                 # Single-command launcher (build + serve on :8000)
-├── install.sh               # One-shot bootstrap installer
+├── start.sh                 # Dev launcher (backend :8000 + Vite :5173, HTTPS)
+├── mailmind                 # Single-command launcher (build + serve on :8000, HTTPS + LAN)
+├── install.sh               # One-shot bootstrap installer (Ollama, deps, mkcert)
 ├── requirements.txt
 └── README.md
 ```
@@ -347,6 +449,26 @@ appears at the bottom of the screen showing live `scanned/total` counts with a
   service, MailMind falls back to `~/.mailmind/master.key` (chmod 600) and logs
   a warning. For better security, install `gnome-keyring` or run a Secret
   Service provider.
+- **Can't open on phone / LAN address times out** — the port is likely
+  firewalled. Allow it on the host machine: `sudo ufw allow 8000` (or whatever
+  port you started on). Also confirm the phone is on the same WiFi network.
+- **Browser shows a cert / "not secure" warning** — that's the self-signed
+  fallback cert (mkcert wasn't installed). It's safe to proceed; to silence it,
+  install mkcert (`mkcert -install`) and restart `./mailmind` — it will
+  regenerate `frontend/cert.pem` trusted by this machine. For the phone to trust
+  it too, install mkcert's root CA on the phone (see
+  [Trusted certificates](#trusted-certificates-on-other-devices)).
+- **"Add to Home screen" installs as a browser shortcut, not an app** — the PWA
+  install requires HTTPS, a web manifest, a maskable icon, and a service
+  worker. All of these are set up automatically; if the install still opens in
+  a browser tab, clear the site's storage (the old service worker is cached):
+  Chrome → site settings → Clear data, then re-open the HTTPS URL and try again.
+- **Stale UI after rebuilding the frontend** — the service worker precaches the
+  old bundle. Clear site data on the device / in Chrome, or do a hard refresh
+  (Ctrl-Shift-R) to force the new `sw.js`.
+- **Pull-to-refresh / back button stopped working on mobile** — these features
+  are bound to the live scroll element via callback refs; if a stale service
+  worker is serving an old bundle, clear site data (see above) and reload.
 - **Reset everything** — quit the app, delete `~/.mailmind/`, restart. You'll
   need to re-add Gmail accounts.
 

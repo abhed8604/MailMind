@@ -9,6 +9,7 @@ import { useSync } from './hooks/useSync'
 import { useResizable } from './hooks/useResizable'
 import { useIsMobile } from './hooks/useIsMobile'
 import { useSwipeToOpen } from './hooks/useSwipeToOpen'
+import { useMobileBackButton } from './hooks/useMobileBackButton'
 import { getAccounts, getEmail, getSettings, patchEmail, startScan, getScanStatus, cancelScan, getModelStatus, warmupModel } from './api/client'
 import { buildAccountColorMap } from './lib/company'
 
@@ -259,6 +260,16 @@ function MailMind() {
   // Whether the reading pane is visible — drives the slide-in/out animation.
   const readerOpen = !!selectedEmail
 
+  // Back button closes overlays (reader first, then sidebar drawer, then
+  // settings) instead of exiting the PWA. A single hook manages one history
+  // entry + one popstate listener for the whole app — the old three-hook
+  // setup raced on history.pushState/back and left the back button dead.
+  useMobileBackButton(isMobile, [
+    { isOpen: readerOpen, close: () => setSelectedEmail(null) },
+    { isOpen: sidebarOpen && !readerOpen, close: () => setSidebarOpen(false) },
+    { isOpen: view === 'settings' && !readerOpen && !sidebarOpen, close: () => setView('inbox') },
+  ])
+
   // Switching view via the sidebar should close the mobile drawer.
   const handleViewChange = useCallback((v) => {
     setView(v)
@@ -355,6 +366,7 @@ function MailMind() {
                 amoled={amoled}
                 accountColorMap={accountColorMap}
                 onOpenMenu={() => setSidebarOpen(true)}
+                onRefresh={syncNow}
               />
             </div>
           )
@@ -414,8 +426,8 @@ function MailMind() {
                 }}
                 amoled={amoled}
                 accountColorMap={accountColorMap}
+                onRefresh={syncNow}
               />
-              {/* Draggable resize divider */}
               <div
                 className="resize-divider"
                 data-resizer="true"

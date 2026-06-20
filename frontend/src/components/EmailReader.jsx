@@ -164,104 +164,113 @@ export default function EmailReader({
         </div>
       </div>
 
-      {/* ---- EMAIL META BLOCK ---- */}
-      <div
-        className="shrink-0 mx-4 mt-3 mm-email-meta"
-        style={{
-          background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
-          borderRadius: '8px',
-          padding: '12px 14px',
-        }}
-      >
-        {/* Subject */}
-        <h1 style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.88)', lineHeight: '1.3' }}>
-          {email.subject || '(no subject)'}
-        </h1>
-
-        {/* Meta rows: From / To / Date */}
-        <div className="mt-2 space-y-1">
-          <MetaRow label="From" value={`${senderLabel} <${email.sender_email || ''}>`} />
-          <MetaRow label="Date" value={email.date ? new Date(email.date).toLocaleString() : ''} />
-        </div>
-
-        {/* Badge row */}
+      {/* ---- SCROLLABLE CONTENT (meta + summary + body) ---- */}
+      {/* Wrapping these together lets the summary scroll away with the body on
+          mobile, instead of pinning and eating screen space. */}
+      <div className="flex-1 overflow-y-auto mm-email-scroll min-w-0" style={{ overflowX: 'hidden' }}>
+        {/* ---- EMAIL META BLOCK ---- */}
         <div
-          className="flex items-center justify-between gap-2 mt-2"
-          style={{ paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
-        >
-          {/* Relevance score chip */}
-          {score != null && (
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                padding: '2px 6px',
-                borderRadius: '3px',
-                ...scoreBadgeStyle(score),
-              }}
-            >
-              relevance {score}
-            </span>
-          )}
-
-          {/* Account pill — shows receiving account email */}
-          <span
-            style={{
-              fontSize: '9px',
-              fontWeight: 500,
-              padding: '1px 6px',
-              borderRadius: '999px',
-              background: acctRamp.pillBg,
-              color: acctRamp.color,
-            }}
-          >
-            {account?.email || email.sender_email}
-          </span>
-
-          {/* Star */}
-          <span
-            className="cursor-pointer"
-            style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.15)', fontSize: '14px' }}
-            onClick={() => onToggleStar?.(email)}
-          >
-            <StarIcon width={14} height={14} filled={email.is_starred} />
-          </span>
-        </div>
-      </div>
-
-      {/* ---- AI SUMMARY ---- */}
-      {email.ai_summary && (
-        <div
-          className="shrink-0 mx-4 mt-3 mm-email-meta"
+          className="mx-4 mt-3 mm-email-meta"
           style={{
-            background: 'rgba(126, 170, 255, 0.06)',
-            border: '0.5px solid rgba(126, 170, 255, 0.12)',
+            background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
             borderRadius: '8px',
-            padding: '10px 14px',
+            padding: '12px 14px',
           }}
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(126, 170, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              ✨ AI Summary
+          {/* Subject */}
+          <h1 style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.88)', lineHeight: '1.3' }}>
+            {email.subject || '(no subject)'}
+          </h1>
+
+          {/* Meta rows: From / To / Date */}
+          <div className="mt-2 space-y-1">
+            <MetaRow label="From" value={`${senderLabel} <${email.sender_email || ''}>`} />
+            <MetaRow label="Date" value={email.date ? new Date(email.date).toLocaleString() : ''} />
+          </div>
+
+          {/* Badge row — score chip (left), spacer, account pill + star (right) */}
+          <div
+            className="flex items-center gap-2 mt-2"
+            style={{ paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
+          >
+            {/* Relevance score chip */}
+            {score != null && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  ...scoreBadgeStyle(score),
+                }}
+              >
+                relevance {score}
+              </span>
+            )}
+
+            {/* Spacer pushes the pill + star to the far right */}
+            <span className="flex-1" />
+
+            {/* Account pill — shows receiving account email */}
+            <span
+              className="shrink-0"
+              style={{
+                fontSize: '9px',
+                fontWeight: 500,
+                padding: '1px 6px',
+                borderRadius: '999px',
+                background: acctRamp.pillBg,
+                color: acctRamp.color,
+              }}
+            >
+              {account?.email || email.sender_email}
+            </span>
+
+            {/* Star */}
+            <span
+              className="cursor-pointer shrink-0"
+              style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.15)', fontSize: '14px' }}
+              onClick={() => onToggleStar?.(email)}
+            >
+              <StarIcon width={14} height={14} filled={email.is_starred} />
             </span>
           </div>
-          <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.60)', lineHeight: '1.6', margin: 0 }}>
-            {email.ai_summary}
-          </p>
         </div>
-      )}
 
-      {/* ---- EMAIL BODY ---- */}
-      <div className="flex-1 overflow-y-auto mm-email-body" style={{ padding: '20px 22px' }}>
-        {bodyPending ? (
-          <BodySkeleton />
-        ) : cleanHtml ? (
-          <EmailFrame html={cleanHtml} />
-        ) : (
-          <pre className="email-body whitespace-pre-wrap" style={{ margin: 0 }}
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(linkifyText(email.body_text || '(no body)'), { USE_PROFILES: { html: true } }) }}
-          />
+        {/* ---- AI SUMMARY ---- */}
+        {email.ai_summary && (
+          <div
+            className="mx-4 mt-3 mm-email-meta"
+            style={{
+              background: 'rgba(126, 170, 255, 0.06)',
+              border: '0.5px solid rgba(126, 170, 255, 0.12)',
+              borderRadius: '8px',
+              padding: '10px 14px',
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(126, 170, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                ✨ AI Summary
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.60)', lineHeight: '1.6', margin: 0 }}>
+              {email.ai_summary}
+            </p>
+          </div>
         )}
+
+        {/* ---- EMAIL BODY ---- */}
+        <div className="mm-email-body" style={{ padding: '20px 22px' }}>
+          {bodyPending ? (
+            <BodySkeleton />
+          ) : cleanHtml ? (
+            <EmailFrame html={cleanHtml} />
+          ) : (
+            <pre className="email-body whitespace-pre-wrap" style={{ margin: 0 }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(linkifyText(email.body_text || '(no body)'), { USE_PROFILES: { html: true } }) }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Floating scanning pill */}
@@ -274,7 +283,7 @@ export default function EmailReader({
 
       {/* ---- REPLY BAR (pinned to bottom) ---- */}
       <div
-        className="shrink-0 flex items-center gap-2"
+        className="shrink-0 flex items-center gap-2 mm-reply-bar"
         style={{
           padding: '8px 14px',
           background: 'rgba(255,255,255,0.02)',
@@ -402,6 +411,7 @@ function EmailFrame({ html }) {
           font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
           font-size: 13px; line-height: 1.75;
           word-wrap: break-word; overflow-wrap: anywhere;
+          overflow-x: hidden;
         }
         a { color: #7eaaff; }
         img { max-width: 100%; height: auto; border-radius: 8px; }

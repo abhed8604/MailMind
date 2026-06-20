@@ -258,6 +258,71 @@ if [[ -n "${CHOSEN_MODEL:-}" ]] || command -v ollama >/dev/null 2>&1; then
   fi
 fi
 
+# ─── 5b. mkcert (trusted HTTPS for PWA / LAN access) ──────────────────────
+# The launcher (./mailmind) generates a TLS cert on first run so the app can
+# be opened as an installable PWA from phones/tablets on your WiFi. mkcert
+# produces a cert trusted by this machine; without it a self-signed cert is
+# used (works, but shows a browser warning). We install it to ~/.local/bin so
+# no sudo is needed.
+step "Setting up mkcert (trusted HTTPS for PWA / phone access)"
+
+if command -v mkcert >/dev/null 2>&1; then
+  info "mkcert is already installed."
+else
+  case "$(uname -s)" in
+    Linux)
+      ARCH="$(uname -m)"
+      case "$ARCH" in
+        x86_64)  MKCERT_ARCH="linux-amd64" ;;
+        aarch64|arm64) MKCERT_ARCH="linux-arm64" ;;
+        *) MKCERT_ARCH="" ;;
+      esac
+      if [[ -n "$MKCERT_ARCH" ]]; then
+        warn "Installing mkcert ($MKCERT_ARCH) to ~/.local/bin …"
+        TMPDIR_MKCERT="$(mktemp -d)"
+        if curl -fsSL -o "$TMPDIR_MKCERT/mkcert" \
+            "https://dl.filippo.io/mkcert/latest?for=$MKCERT_ARCH"; then
+          chmod +x "$TMPDIR_MKCERT/mkcert"
+          mkdir -p "$HOME/.local/bin"
+          mv "$TMPDIR_MKCERT/mkcert" "$HOME/.local/bin/mkcert"
+          rm -rf "$TMPDIR_MKCERT"
+          # Ensure ~/.local/bin is on PATH for this session + the launcher.
+          case ":$PATH:" in
+            *":$HOME/.local/bin:"*) ;;
+            *) export PATH="$HOME/.local/bin:$PATH" ;;
+          esac
+          info "mkcert installed to ~/.local/bin/mkcert"
+        else
+          fail "Could not download mkcert. The launcher will fall back to a self-signed cert."
+        fi
+      else
+        warn "Unsupported architecture ($ARCH) for mkcert auto-install. Install it manually from https://github.com/FiloSottile/mkcert."
+      fi
+      ;;
+    Darwin)
+      if command -v brew >/dev/null 2>&1; then
+        warn "Installing mkcert via Homebrew …"
+        brew install mkcert
+        info "mkcert installed via Homebrew."
+      else
+        warn "Homebrew not found. Install mkcert manually from https://github.com/FiloSottile/mkcert."
+      fi
+      ;;
+    *)
+      warn "Unsupported OS for mkcert auto-install. Install it manually from https://github.com/FiloSottile/mkcert."
+      ;;
+  esac
+fi
+
+# Install the local CA once so this machine trusts the certs mkcert issues.
+# (Needs certutil; skip silently if missing — the cert still works, just with
+#  a warning until the user runs `mkcert -install` themselves.)
+if command -v mkcert >/dev/null 2>&1; then
+  warn "Trusting the mkcert root CA on this machine …"
+  mkcert -install >/dev/null 2>&1 || warn "mkcert -install needs certutil. The cert still works; run 'mkcert -install' later."
+  info "mkcert ready. ./mailmind will generate a trusted HTTPS cert on first run."
+fi
+
 # ─── 6. Python virtual environment ──────────────────────────────────────────
 step "Setting up Python environment"
 
@@ -441,6 +506,16 @@ if [[ -n "${CHOSEN_MODEL:-}" ]]; then
 else
   echo "  LLM model:     ${YELLOW}not configured${RST} (run 'ollama pull <model>')"
 fi
+if command -v mkcert >/dev/null 2>&1; then
+  echo "  HTTPS/PWA:     ${CYAN}mkcert${RST} (trusted cert will be generated on first launch)"
+else
+  echo "  HTTPS/PWA:     ${YELLOW}self-signed${RST} (install mkcert for a warning-free cert)"
+fi
+echo
+echo "  ${BOLD}Access:${RST}"
+echo "    • On this machine:    https://localhost:8000"
+echo "    • On phone/tablet:    https://<this-machine-LAN-IP>:8000  (same WiFi)"
+echo "      — then 'Add to Home Screen' to install as a standalone PWA."
 echo
 echo "  Next steps (manual):"
 echo "    cd $INSTALL_DIR"

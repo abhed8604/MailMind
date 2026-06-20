@@ -69,6 +69,20 @@ def _utcnow() -> _dt.datetime:
     return _dt.datetime.now(_dt.timezone.utc)
 
 
+def _iso(dt: _dt.datetime | None) -> str | None:
+    """Serialize a datetime to ISO 8601 in UTC.
+
+    SQLite silently strips tzinfo from timezone-aware datetimes on retrieval,
+    so ``dt.isoformat()`` would yield a naive string (no ``+00:00``) that the
+    browser then misinterprets as local time. Force UTC before serializing.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.timezone.utc)
+    return dt.astimezone(_dt.timezone.utc).isoformat()
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -88,8 +102,8 @@ class Account(Base):
             "color": self.color,
             "paused": self.paused,
             "needs_reauth": self.needs_reauth,
-            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_synced_at": _iso(self.last_synced_at),
+            "created_at": _iso(self.created_at),
         }
 
 
@@ -137,7 +151,7 @@ class Email(Base):
             "snippet": self.snippet,
             "body_html": self.body_html,
             "body_text": self.body_text,
-            "date": self.date.isoformat() if self.date else None,
+            "date": _iso(self.date),
             "is_read": self.is_read,
             "is_starred": self.is_starred,
             "labels": json.loads(self.labels) if self.labels else [],
@@ -146,10 +160,10 @@ class Email(Base):
             "importance_reason": self.importance_reason,
             "category": self.category,
             "action_required": self.action_required,
-            "scanned_at": self.scanned_at.isoformat() if self.scanned_at else None,
+            "scanned_at": _iso(self.scanned_at),
             "scan_model": self.scan_model,
             "ai_summary": self.ai_summary,
-            "synced_at": self.synced_at.isoformat() if self.synced_at else None,
+            "synced_at": _iso(self.synced_at),
         }
 
     def to_list_dict(self) -> dict[str, Any]:
@@ -172,7 +186,7 @@ class Email(Base):
             "subject": self.subject,
             "snippet": self.snippet,
             "preview": preview,
-            "date": self.date.isoformat() if self.date else None,
+            "date": _iso(self.date),
             "is_read": self.is_read,
             "is_starred": self.is_starred,
             "labels": json.loads(self.labels) if self.labels else [],
@@ -181,10 +195,10 @@ class Email(Base):
             "importance_reason": self.importance_reason,
             "category": self.category,
             "action_required": self.action_required,
-            "scanned_at": self.scanned_at.isoformat() if self.scanned_at else None,
+            "scanned_at": _iso(self.scanned_at),
             "scan_model": self.scan_model,
             "ai_summary": self.ai_summary,
-            "synced_at": self.synced_at.isoformat() if self.synced_at else None,
+            "synced_at": _iso(self.synced_at),
         }
 
 

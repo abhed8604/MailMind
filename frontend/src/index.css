@@ -27,8 +27,11 @@ body {
 
 /* --- Outer shell ------------------------------------------------------- */
 .app-shell {
+  /* 100dvh (dynamic viewport height) tracks the mobile browser chrome as it
+     hides/shows, avoiding a gap below the content. Falls back to 100vh. */
   height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
   display: flex;
   border-radius: 12px;
   overflow: hidden;
@@ -170,12 +173,59 @@ body {
 .email-list-enter { animation: fadeSlideIn 0.18s ease-out; }
 
 /* --- Mobile responsive -------------------------------------------------- */
-/* Mobile-only drawer close button + inline hamburger: hidden on desktop. */
+/* Mobile-only drawer close button + inline hamburger + brand bar: hidden on desktop. */
 .mobile-drawer-close { display: none; }
 .mm-list-hamburger { display: none; }
+.mm-mobile-brand { display: none; }
+
+/* Safety net: contain overflow from the mobile list/settings containers. */
+.mm-mobile-list-top { overflow: hidden; min-width: 0; }
 
 @media (max-width: 767px) {
   .app-shell { border-radius: 0; }
+
+  /* Extend into the home-indicator safe area so the app fills the screen.
+     The reply bar and list footer add bottom padding equal to that inset,
+     keeping their content clear of the gesture bar. We target dedicated
+     classes (not fragile `aside > div:last-child` selectors) so we never
+     accidentally pad the wrong child (e.g. ScanProgressBar). */
+  .mm-reply-bar {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+  .mm-list-footer {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Notch / status-bar safe area at the top. The brand bar (on the list),
+     the reader toolbar, and the sidebar drawer all sit under the top inset,
+     so they pad themselves clear of the camera/status bar. The brand bar
+     is the topmost element on the mobile home page, so it owns the inset. */
+  .mm-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: calc(8px + env(safe-area-inset-top)) 0 2px 16px;
+  }
+  .mm-brand-mark {
+    font-size: 15px;
+    line-height: 1;
+    background: linear-gradient(135deg, #7eaaff, #b48aff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .mm-brand-name {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: rgba(255, 255, 255, 0.92);
+  }
+  .mobile-reader-overlay aside > div:first-child {
+    padding-top: calc(8px + env(safe-area-inset-top)) !important;
+  }
+  .mobile-sidebar-drawer {
+    padding-top: env(safe-area-inset-top);
+  }
 
   /* Sidebar drawer overlay backdrop */
   .mobile-drawer-backdrop {
@@ -249,8 +299,8 @@ body {
   .mobile-reader-overlay .mm-email-body .email-body { font-size: 13px !important; line-height: 1.65 !important; }
   /* Slightly reduce the reader toolbar padding on mobile so action icons fit. */
   .mobile-reader-overlay aside > div:first-child { padding-left: 10px !important; padding-right: 10px !important; }
-  /* Reply bar: tighter on mobile */
-  .mobile-reader-overlay aside > div:last-child { padding-left: 10px !important; padding-right: 10px !important; }
+  /* Reply bar: tighter horizontal padding on mobile */
+  .mm-reply-bar { padding-left: 10px !important; padding-right: 10px !important; }
 }
 
 @keyframes fadeIn {

@@ -51,7 +51,7 @@ export default function EmailCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left flex flex-col transition-colors"
+      className="w-full text-left flex flex-col min-w-0 overflow-hidden transition-colors"
       style={{
         padding: '9px 14px',
         background: rowBg,
@@ -91,7 +91,7 @@ export default function EmailCard({
         {/* Receiver account pill — shows the inbox that received this mail */}
         {receiverEmail && (
           <span
-            className="shrink-0 truncate max-w-[110px]"
+            className="truncate max-w-[110px]"
             style={{
               fontSize: '9px',
               fontWeight: 500,
@@ -107,9 +107,9 @@ export default function EmailCard({
         )}
       </div>
 
-      {/* PREVIEW — full summary, no clamp */}
+      {/* PREVIEW — full summary */}
       <div
-        className="mt-0.5"
+        className="mt-0.5 overflow-hidden break-words"
         style={{
           fontSize: '11px',
           color: unread ? 'rgba(255,255,255,0.50)' : 'rgba(255,255,255,0.28)',

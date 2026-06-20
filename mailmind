@@ -68,6 +68,36 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# ---- preflight: TLS certificate (for PWA / HTTPS) ---------------------------
+CERT_DIR="$ROOT/frontend"
+CERT="$CERT_DIR/cert.pem"
+KEY="$CERT_DIR/key.pem"
+if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
+  LAN_IP_TEMP=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [[ -n "$LAN_IP_TEMP" ]]; then
+    CERT_HOSTS="localhost 127.0.0.1 $LAN_IP_TEMP"
+  else
+    CERT_HOSTS="localhost 127.0.0.1"
+  fi
+  if command -v mkcert >/dev/null 2>&1; then
+    echo "→ Generating trusted TLS certificate via mkcert…"
+    mkcert -install 2>/dev/null
+    mkcert -cert-file "$CERT" -key-file "$KEY" $CERT_HOSTS
+    echo "✓ Certificate saved to $CERT (trusted by this machine)"
+    echo "  To trust on your phone, install the CA cert on it:"
+    echo "  $(mkcert -CAROOT)/rootCA.pem"
+  else
+    echo "→ mkcert not found — generating self-signed cert (browser will warn)…"
+    echo "  For a warning-free experience, install mkcert:"
+    echo "  https://github.com/FiloSottile/mkcert"
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+      -keyout "$KEY" -out "$CERT" -days 3650 -nodes \
+      -subj "/CN=MailMind" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+      2>/dev/null
+    echo "✓ Certificate saved to $CERT"
+  fi
+fi
+
 # ---- preflight: Ollama ----------------------------------------------------
 # Auto-start the local LLM so triage/summaries work out of the box. If Ollama
 # is already running (or not installed), we continue either way.
@@ -99,17 +129,27 @@ fi
 
 if [[ "$DEV_MODE" == true ]]; then
   echo "→ [dev mode] Starting backend on :8000 and Vite on :5173…"
-  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 & CHILDREN+=($!)
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 \
+    --ssl-keyfile "$KEY" --ssl-certfile "$CERT" & CHILDREN+=($!)
   (cd frontend && npm run dev) & CHILDREN+=($!)
   sleep 3
-  URL="http://localhost:5173"
+  URL="https://localhost:5173"
+  LAN_PORT=5173
 else
   echo "→ Starting MailMind on :8000 …"
-  backend/.venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 & CHILDREN+=($!)
-  URL="http://localhost:8000"
+  backend/.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 \
+    --ssl-keyfile "$KEY" --ssl-certfile "$CERT" & CHILDREN+=($!)
+  URL="https://localhost:8000"
+  LAN_PORT=8000
 fi
 
 sleep 2
+
+# ---- LAN IP detection -------------------------------------------------------
+LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [[ -z "$LAN_IP" ]]; then
+  LAN_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)
+fi
 
 # Open browser if possible.
 if command -v xdg-open >/dev/null 2>&1; then
@@ -120,6 +160,12 @@ fi
 
 echo
 echo "✓ MailMind running at $URL"
+if [[ -n "$LAN_IP" ]]; then
+  echo "  LAN: https://$LAN_IP:$LAN_PORT"
+  echo "  (open on other devices via the LAN address above)"
+  echo "  If unreachable, run: sudo ufw allow $LAN_PORT"
+fi
+echo "  Note: self-signed cert — your browser may show a warning."
 echo "  (Ctrl-C to stop)"
 echo
 wait

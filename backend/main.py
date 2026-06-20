@@ -12,6 +12,7 @@ Startup responsibilities:
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -222,14 +223,16 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 app = FastAPI(title="MailMind", version="0.1.1", lifespan=lifespan)
 
+# Ensure PWA assets are served with correct MIME types regardless of the host
+# Python version or /etc/mime.types. Chrome rejects manifests served as
+# anything other than application/manifest+json, and a wrong .js MIME breaks
+# service-worker registration.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("text/javascript", ".js")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ],
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

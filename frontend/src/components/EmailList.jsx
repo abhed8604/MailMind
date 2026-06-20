@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import EmailCard from './EmailCard'
 import { SearchIcon } from './Icon'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 
 const FILTERS = [
   { id: 'important', label: 'Important' },
@@ -35,18 +36,29 @@ export default function EmailList({
   amoled,
   accountColorMap,
   onOpenMenu,
+  onRefresh,
 }) {
   const accountsById = useMemo(
     () => Object.fromEntries(accounts.map((a) => [a.id, a])),
     [accounts],
   )
 
+  // Pull-to-refresh on the email list scroll container.
+  // usePullToRefresh returns a refCallback we attach to the scroll element;
+  // it holds the node in state so listeners re-attach after `key={filter}`
+  // remounts the div on every tab switch.
+  const { pullDist, refCallback: listRefCallback } = usePullToRefresh({ onRefresh, threshold: 60 })
+
   return (
     <div
       className="h-full flex flex-col min-w-0"
       style={{ background: amoled ? '#000000' : '#16162a', ...style }}
     >
-      {/* Header: title + search */}
+      {/* Header: brand wordmark (mobile only) + title + search */}
+      <div className="mm-mobile-brand">
+        <span className="mm-brand-mark">✦</span>
+        <span className="mm-brand-name">MailMind</span>
+      </div>
       <div className="px-3.5 pt-3 pb-2.5">
         <div className="flex items-center gap-2 mb-2 min-w-0">
           {/* Mobile hamburger — inline next to the title (hidden on desktop) */}
@@ -98,7 +110,20 @@ export default function EmailList({
       <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)' }} />
 
       {/* Scrollable email list — re-mounts on filter change to trigger animation */}
-      <div key={filter} className="flex-1 overflow-y-auto email-list-enter">
+      <div key={filter} ref={listRefCallback} className="flex-1 overflow-y-auto email-list-enter" style={{ position: 'relative' }}>
+        {/* Pull-to-refresh spinner */}
+        {pullDist > 0 && (
+          <div
+            className="flex items-center justify-center"
+            style={{
+              height: Math.min(pullDist, 70),
+              opacity: Math.min(pullDist / 40, 1),
+              transition: pullDist === 0 ? 'height 0.2s' : 'none',
+            }}
+          >
+            <span className="spinner" />
+          </div>
+        )}
         {error && (
           <div
             className="mx-2 mt-2 px-3 py-2 text-[12px] rounded-lg"
@@ -131,7 +156,7 @@ export default function EmailList({
 
       {/* Pagination footer */}
       <div
-        className="px-3.5 py-2 text-center"
+        className="px-3.5 py-2 text-center mm-list-footer"
         style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
       >
         {data.total > 0 ? (
