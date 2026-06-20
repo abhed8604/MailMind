@@ -80,7 +80,12 @@ info "git, python3, node, npm, curl — all present"
 step "Choose install location"
 
 REPO_URL="${MAILMIND_REPO_URL:-https://github.com/abhed8604/MailMind.git}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When run via `curl | bash` there is no script file, so BASH_SOURCE[0] is
+# empty — fall back to the current working directory in that case. (The `-u`
+# flag would otherwise crash on the unbound reference.)
+SCRIPT_SRC="${BASH_SOURCE[0]:-$0}"
+SCRIPT_SRC="${SCRIPT_SRC:-.}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SRC")" 2>/dev/null && pwd || pwd)"
 
 # If already inside a MailMind repo, offer to use cwd
 IN_REPO=false
