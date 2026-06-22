@@ -188,11 +188,11 @@ function MailMind() {
           setTimeout(() => setScanProgress({ scanned: 0, total: 0 }), 3000)
           if (s.summary) {
             if (s.summary.unavailable) {
-              toast.error('Ollama unavailable — start it or check the model name in Settings.')
+              toast.error('Ollama unavailable. Start it or check the model name in Settings.')
             } else if (s.summary.scanned > 0) {
               toast.success(`Triage done: ${s.summary.scanned} scanned, ${s.summary.important} important.`)
             } else {
-              toast.info('Triage done — no new emails to scan. Try "rescan all" to re-triage everything.')
+              toast.info('Triage done. No new emails to scan. Try "rescan all" to re-triage everything.')
             }
           }
           setScanTick((t) => t + 1)
@@ -224,7 +224,7 @@ function MailMind() {
     if (ev.type === 'sync-done') {
       const triage = Array.isArray(ev.result) && ev.result.find((r) => r.triage)?.triage
       if (triage?.scanned) {
-        toast.success(`Background sync done — auto-scanned ${triage.scanned} email(s).`)
+        toast.success(`Background sync done. Auto-scanned ${triage.scanned} email(s).`)
       } else {
         toast.info('Background sync complete.')
       }
@@ -310,7 +310,7 @@ function MailMind() {
       onCancelScan={async () => {
         try {
           await cancelScan()
-          toast.info('Cancel requested — will stop after current batch.')
+          toast.info('Cancel requested. Will stop after current batch.')
         } catch (e) {
           toast.error(`Cancel failed: ${e.message}`)
         }

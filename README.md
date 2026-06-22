@@ -1,82 +1,44 @@
 # MailMind
 
-A local-first web app that aggregates **multiple Gmail accounts** into a
-single unified inbox and uses a **local LLM (Ollama)** to surface the emails
-that actually matter.
+I have too many email accounts. Work, college, personal, side projects — and every single one of them gets spammed. At some point managing them became its own full-time job: open Gmail, switch account, scroll through 200 newsletters and LinkedIn digests, find the one email that actually needed a reply, repeat for every account. It was exhausting.
 
-Everything runs on your machine. No cloud, no telemetry — your mail only ever
-touches your machine and Gmail's own API. Serve it over **LAN/HTTPS** and open
-it on any phone or tablet as an **installable PWA**.
+So I built MailMind. It pulls all your Gmail accounts into one inbox, runs a local AI model over your emails, and shows you only the ones that actually matter — with a summary so you don't even have to open most of them. No cloud, no subscriptions, no sending your emails to some third-party server. Everything stays on your machine.
 
 ---
 
-## Features
+## What it does
 
-- **Multi-account unified inbox** — every connected Gmail account in one
-  chronological feed, each email tagged with a color-coded account dot.
-- **Local LLM triage** — each email is classified by a local model
-  (`hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` by default) into
-  `important` + a category (`action_required`, `deadline`, `financial`,
-  `personal`, `newsletter`, `spam`, `other`), with a 0–10 score, a one-line
-  reason, and an **AI summary** shown above the email body.
-- **Auto model warmup** — the configured LLM model is preloaded into RAM at
-  startup so the first scan is instant. A live status indicator in the sidebar
-  (green/amber/red dot) shows whether the model is ready, loading, or
-  unavailable — click it to manually start or reload.
-- **Custom triage rules** — write your own importance rules in plain Markdown
-  (editable from Settings). They're prepended to the triage prompt so the model
-  applies your criteria before classifying each email.
-- **Robust scan pipeline** — scans up to 500 emails per pass, retries once
-  after 30s if Ollama is unavailable, and marks parse errors as scanned (so
-  emails don't re-queue forever). A floating progress bar with cancel button
-  tracks the scan in real time.
-- **Incremental sync** — first connect fetches your last N emails; afterwards a
-  background job uses Gmail's `historyId` to pull only what changed every few
-  minutes.
-- **Stays connected across restarts** — tokens persist (encrypted), and on every
-  launch MailMind refreshes them and resumes syncing automatically. No
-  re-authentication needed unless you revoke access.
-- **Encrypted token storage** — OAuth tokens are Fernet-encrypted at rest in
-  `~/.mailmind/accounts.json`; the encryption key lives in your OS keyring.
-- **Installable PWA + LAN access** — `./mailmind` binds to `0.0.0.0` over HTTPS
-  (trusted cert via `mkcert`), so you can open MailMind on any device on your
-  WiFi and **Add to Home Screen** to get a standalone app — not a browser
-  shortcut. Includes a proper web manifest, maskable icons, and a service
-  worker for offline shell caching.
-- **Polished mobile experience** — responsive shell that collapses to
-  full-screen panels (<768px) with: drawer sidebar, pull-to-refresh on the
-  inbox, hardware-back-button handling that closes overlays instead of exiting
-  the PWA, safe-area insets for notch / home indicator, AMOLED-black theme, and
-  the **MailMind** wordmark at the top of the home screen.
-- **Single-command launcher** — `./mailmind` builds the frontend once and serves
-  everything (API + UI) from one process on a single port.
-- **Demo mode** — seed the UI with ~30 realistic mock emails so you can explore
-  it before connecting real accounts or pulling a model (auto-disables once you
-  connect a real account).
+- Connects multiple Gmail accounts and merges them into a single chronological inbox. Each email is tagged with a colored dot so you know which account it came from.
+- Runs a local LLM (via Ollama) on every email and scores it 0–10 for importance. Anything above your threshold shows up in the **Important** tab with a one-line reason and an AI-generated summary — so you can triage 100 emails in 2 minutes.
+- Categories emails automatically: `action_required`, `deadline`, `financial`, `personal`, `newsletter`, `spam`, or `other`.
+- Lets you write your own triage rules in plain English (like "emails from my manager are always important" or "ignore GitHub notifications"). These get injected into the prompt before every scan.
+- Syncs incrementally in the background — it only fetches what changed since the last run, so it stays fast.
+- Tokens are encrypted at rest and persist across restarts. You authenticate once per account and never again (unless you revoke access).
+- Serves over HTTPS on your LAN, so you can open it on your phone and install it as a PWA. It behaves like a native app — hardware back button, pull-to-refresh, AMOLED dark theme, no browser chrome.
 
 ---
 
 ## Prerequisites
 
-| Tool   | Version            | Notes                                            |
-|--------|--------------------|--------------------------------------------------|
-| Python | 3.11+ (tested 3.14)| Backend                                          |
-| Node   | 18+ (tested 22)    | Frontend build (one-time; not needed at runtime) |
-| Ollama | any recent         | Local LLM runtime — `ollama.com`                 |
-| mkcert | any recent         | **Optional** — trusted HTTPS certs so the PWA installs warning-free. The launcher auto-installs it if missing. |
+| Tool   | Version | Notes |
+|--------|---------|-------|
+| Python | 3.11+   | Backend |
+| Node   | 18+     | Frontend build (one-time, not needed at runtime) |
+| Ollama | any     | Local LLM runtime — [ollama.com](https://ollama.com) |
+| mkcert | any     | Optional but recommended — trusted HTTPS so the PWA installs cleanly |
 
-Install Ollama and pull the default model:
+Pull the default model:
 
 ```bash
-ollama pull hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS   # one-time
+ollama pull hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS
 ```
 
-For trusted HTTPS on your LAN (recommended for phone/PWA use), install mkcert:
+Install mkcert for trusted HTTPS (needed for PWA on mobile):
 
 ```bash
-# Linux (installs to ~/.local/bin and adds the CA to trust store)
+# Linux
 curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64"
-chmod +x mkcert-*. && mkdir -p ~/.local/bin && mv mkcert-* ~/.local/bin/mkcert
+chmod +x mkcert-* && mkdir -p ~/.local/bin && mv mkcert-* ~/.local/bin/mkcert
 mkcert -install
 
 # macOS
@@ -87,67 +49,38 @@ brew install mkcert && mkcert -install
 
 ## Setup
 
-There are two ways to get started: the **one-shot installer** (recommended for
-new machines) or the **manual setup** (if you've already cloned the repo).
+### Option 1: one-shot installer (recommended)
 
-### Quick start: one-shot installer
-
-A single bootstrap script clones the repo, installs Ollama, lets you pick an LLM
-model from a menu, sets up the Python venv + Node deps, and walks you through a
-`credentials.json` wizard — then offers to launch the app.
+This clones the repo, installs Ollama if missing, lets you pick an LLM from a menu, sets up the Python venv and Node deps, and walks you through connecting your `credentials.json`. It's idempotent — running it again skips already-done steps.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/abhed8604/MailMind/main/install.sh | bash
 ```
 
-Or, if you've already cloned the repo:
+Or if you already cloned it:
 
 ```bash
 bash install.sh
 ```
 
-The installer will prompt you for:
+### Option 2: manual setup
 
-- **Install location** — where to clone MailMind (defaults to `~/MailMind`).
-- **Ollama** — installs it if missing (Linux: `ollama.com` installer; macOS:
-  Homebrew if available).
-- **LLM model** — pick from a menu: Gemma 4 E2B (default), Llama 3.1 8B,
-  Qwen2.5 3B, TinyLlama 1.1B, or skip and pull later.
-- **`credentials.json`** — paste your Google OAuth Desktop JSON directly, or
-  skip and add it later at `backend/credentials.json`.
-- **Launch** — start the app immediately via `./mailmind`, or exit and run it
-  yourself.
+**Step 1 — Get Gmail OAuth credentials**
 
-It's idempotent: re-running it skips already-done steps (Ollama installed, venv
-present, deps installed), so it doubles as an updater.
+MailMind uses a "Desktop app" OAuth client to read your Gmail. You need to create one in Google Cloud (it's free and takes about 5 minutes):
 
-### Manual setup
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and create a project.
+2. **APIs & Services → Library** → search **Gmail API** → Enable it.
+3. **APIs & Services → OAuth consent screen** — set user type to External, add your own Google account as a test user, and add these scopes:
+   - `https://www.googleapis.com/auth/gmail.readonly`
+   - `https://www.googleapis.com/auth/gmail.modify`
+   - `https://www.googleapis.com/auth/gmail.labels`
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID** — pick **Desktop app**, download the JSON.
+5. Save it as `backend/credentials.json`.
 
-#### 1. Gmail OAuth credentials (the one manual step)
+> This file is in `.gitignore`. Don't commit it.
 
-MailMind needs its own OAuth "Desktop app" client to talk to Gmail on your
-behalf.
-
-1. Open the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a project (or pick an existing one).
-3. **APIs & Services → Library →** search **Gmail API → Enable**.
-4. **APIs & Services → OAuth consent screen:**
-   - User type **External** (it's just you — add your own Google account as a
-     test user).
-   - Add the scopes:
-     - `https://www.googleapis.com/auth/gmail.readonly`
-     - `https://www.googleapis.com/auth/gmail.modify`
-     - `https://www.googleapis.com/auth/gmail.labels`
-5. **APIs & Services → Credentials → Create credentials → OAuth client ID:**
-   - Application type: **Desktop app**.
-   - Download the resulting JSON.
-6. Save it as **`backend/credentials.json`** (next to `main.py`).
-
-> This file is in `.gitignore`. Never commit it.
-
-#### 2. Install dependencies
-
-The first run of `./mailmind` installs everything, but you can do it manually:
+**Step 2 — Install dependencies**
 
 ```bash
 # Backend
@@ -158,226 +91,73 @@ backend/.venv/bin/pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
-#### 3. Run
+**Step 3 — Run it**
 
 ```bash
 ./mailmind
 ```
 
-This is the **single command**: it ensures the Python venv + deps are installed,
-builds the frontend once (cached afterward), generates a TLS certificate
-(via `mkcert` if installed, else a self-signed fallback), then starts **one**
-uvicorn process that serves both the API and the built UI over **HTTPS** on
-`:8000` and opens your browser.
-
-It prints both URLs on startup:
+That's the only command you need. It builds the frontend (cached after the first time), generates a TLS cert, and starts everything on port 8000. It'll print both a localhost and LAN URL.
 
 ```
 ✓ MailMind running at https://localhost:8000
   LAN: https://192.168.x.x:8000
-  (open on other devices via the LAN address above)
 ```
 
-> **Dev mode** (with Vite hot-reload): `./mailmind --dev` — runs the backend on
-> `:8000` and Vite on `:5173` (API requests proxy through to the backend).
+> Dev mode with hot reload: `./mailmind --dev`  
+> Just build the frontend: `./mailmind --build`  
+> Stop: `Ctrl-C`
 
-> **Just build the frontend** (no server): `./mailmind --build`.
+**Step 4 — Connect your Gmail accounts**
 
-> **Stop the server**: press `Ctrl-C` in the terminal — it cleanly kills the
-> backend and frees port 8000.
+On first launch you'll see a demo inbox with fake emails so you can explore the UI. Once you're ready:
 
-**On first launch the app runs in Demo Mode** — it seeds ~30 fake emails (some
-already triaged) so the UI is fully explorable with zero setup. Demo mode
-**auto-disables** the moment you connect a real Gmail account.
+1. **Settings → Gmail Accounts → Add Gmail Account**
+2. Approve the Google consent screen in your browser.
+3. MailMind pulls your last 500 emails and starts syncing.
 
-### 4. Connect a Gmail account (do this once)
+Repeat for as many accounts as you want. After this, every time you run `./mailmind` they reconnect automatically.
 
-1. Open **Settings → Gmail Accounts → Add Gmail Account**.
-2. Your browser opens Google's consent screen. Approve.
-3. The backend captures the OAuth redirect, stores the **encrypted** token, and
-   immediately pulls your **last 500 historical emails** (configurable) —
-   inline, so you see them appear right away.
+**Step 5 — Run triage**
 
-Repeat for as many accounts as you like. **From now on, every time you run
-`./mailmind`, all your accounts reconnect automatically** — no re-consent
-needed, and incremental sync resumes within seconds.
+The model warms up automatically at startup. Click **⚡ Scan for Important** above the inbox, or enable Auto-scan in Settings to have it run after every sync. Switch to the **Important** tab to see what the model flagged.
 
-### 5. Run triage
-
-The LLM model is **automatically warmed up at startup** so it's ready to scan.
-Click **⚡ Scan for Important** above the inbox (or the scheduler does it
-automatically after each sync if **Auto-scan** is on). Switch to the
-**Important** tab to see results sorted by score.
-
-If the model isn't ready, the **brain icon** in the sidebar shows a pulsing
-amber dot — click it to start/reload the model manually.
+The brain icon in the sidebar shows model status: green = ready, amber (pulsing) = loading, red = Ollama isn't running or the model isn't pulled.
 
 ---
 
-## Mobile, PWA & LAN access
+## Using it on your phone
 
-MailMind is a fully **installable PWA** — on a phone it runs as a standalone
-app (its own window, no browser chrome), not a bookmark. Because installable
-PWAs require HTTPS, the launcher serves over TLS by default.
+MailMind serves over HTTPS so it works as an installable PWA on mobile.
 
-### 1. Open on your phone
+1. Start the app and note the LAN address it prints.
+2. Make sure your phone is on the same WiFi.
+3. Open the URL in Chrome (Android) or Safari (iOS).
 
-1. Start the app on your machine (`./mailmind`) and note the **LAN address**
-   it prints (e.g. `https://192.168.1.41:8000`).
-2. Make sure your phone is on the **same WiFi**.
-3. Open that URL in Chrome / Safari. Accept the cert warning the first time
-   (see [Trusted certificates](#trusted-certificates-on-other-devices) below
-   to make it warning-free).
+To install as an app:
+- **Android**: menu → Add to Home Screen, or tap the install prompt in the address bar.
+- **iOS**: Share → Add to Home Screen.
+- **Desktop**: click the install icon in the address bar.
 
-> **Firewall**: if the phone can't connect, allow the port on the machine
-> running MailMind: `sudo ufw allow 8000`.
-
-### 2. Install as an app
-
-- **Android (Chrome):** open the menu → **Add to Home screen** (or tap the
-  install prompt in the address bar). It appears as a standalone icon and
-  opens in its own window.
-- **iOS (Safari):** tap **Share → Add to Home Screen**.
-- **Desktop (Chrome/Edge):** click the install icon in the address bar.
-
-The install works because the manifest advertises `display: standalone`, three
-icon sizes (including a **maskable** icon so it fills Android's adaptive
-shape), and the service worker provides offline shell caching.
-
-### 3. Mobile UX features
-
-- **Hardware back button** closes the open overlay (reader → drawer → settings)
-  before exiting the app — no accidental exits.
-- **Pull-to-refresh** on the inbox triggers a sync.
-- **Safe-area insets** — content clears the notch / status bar / home indicator.
-- **AMOLED-black theme** — toggle in Settings for true-black backgrounds.
-- **MailMind wordmark** at the top of the home screen.
-
-### Trusted certificates on other devices
-
-`mkcert` generates a cert trusted by the machine that ran it. For a
-warning-free experience on your phone, you need to trust mkcert's root CA on
-the phone too:
+If you get a cert warning on your phone, either proceed anyway (it's your own cert, it's fine) or install mkcert's root CA on the phone:
 
 ```bash
-mkcert -CAROOT        # prints the folder containing rootCA.pem
+mkcert -CAROOT   # shows where rootCA.pem lives
 ```
 
-- **Android:** Settings → Security → Encryption & credentials → Install a
-  certificate → CA certificate → pick `rootCA.pem`. (Exact menu names vary.)
-- **iOS:** AirDrop/email `rootCA.pem` to the phone, install the profile in
-  Settings, then enable it under Settings → General → About → Certificate
-  Trust Settings.
+- **Android**: Settings → Security → Install a certificate → CA certificate → pick `rootCA.pem`
+- **iOS**: AirDrop the file to your phone, install the profile, then enable it under Settings → General → About → Certificate Trust Settings
 
-Without this, the cert still works — you just get a one-time warning each time
-you open the app.
-
-> The cert and key (`frontend/cert.pem`, `frontend/key.pem`) are
-> `.gitignore`d — each machine generates its own with the correct LAN IP.
-
----
-
-## Project structure
-
-```
-mailmind/
-├── backend/
-│   ├── main.py              # FastAPI app, CORS, startup/lifespan, LLM warmup
-│   ├── accounts.py          # OAuth2 flow, encrypted token storage
-│   ├── gmail_sync.py        # Gmail fetch + incremental sync + backoff
-│   ├── database.py          # SQLAlchemy models, settings store
-│   ├── security.py          # Fernet via OS keyring, accounts.json
-│   ├── scheduler.py         # APScheduler background sync
-│   ├── llm_triage.py        # Ollama client + prompt + JSON parsing + warmup
-│   ├── triage_runner.py     # DB <-> LLM bridge (batch scans, 500 limit, retry)
-│   ├── triage_rules.py      # User-editable markdown triage rules
-│   ├── mock_data.py         # Demo-mode seed data
-│   ├── smoke_test.py        # Live triage pipeline test
-│   └── routes/
-│       ├── emails.py        # /emails list/detail/patch
-│       ├── accounts.py      # /accounts + OAuth start
-│       ├── sync.py          # /sync + /sync/status
-│       ├── triage.py        # /triage scan/rescan/warmup/model-status
-│       └── settings.py      # /settings get/put + clear-data
-├── frontend/
-│   ├── public/
-│   │   ├── favicon.svg       # MailMind logo (envelope + AI spark)
-│   │   ├── pwa-192x192.png   # PWA icon (any)
-│   │   ├── pwa-512x512.png   # PWA icon (any)
-│   │   └── maskable-512x512.png  # PWA icon (maskable — fills Android adaptive shape)
-│   ├── index.html            # viewport-fit=cover, Apple meta tags, theme-color
-│   ├── vite.config.js        # vite-plugin-pwa (manifest + Workbox runtime caching)
-│   └── src/
-│       ├── App.jsx          # Shell, desktop 3-panel + mobile responsive layout
-│       ├── index.css        # Flat dark theme, safe-area insets, AMOLED, brand bar
-│       ├── components/
-│       │   ├── Sidebar.jsx       # 48px icon rail, LLM status indicator
-│       │   ├── EmailList.jsx     # Filterable email list with tab pills + pull-to-refresh
-│       │   ├── EmailCard.jsx     # Single email row (sender, preview, score, star)
-│       │   ├── EmailReader.jsx   # Reading pane with AI summary + iframe body
-│       │   ├── Settings.jsx      # Flat dark settings panel
-│       │   ├── ScanProgressBar.jsx  # Floating scan progress pill
-│       │   ├── Icon.jsx          # SVG icon components (including BrainIcon)
-│       │   ├── Toast.jsx         # Toast notification system
-│       │   ├── SearchBar.jsx     # Search input component
-│       │   └── TriageBadge.jsx   # Category/relevance badge
-│       ├── hooks/
-│       │   ├── useEmails.js           # Email fetching, pagination, toggle read/star
-│       │   ├── useSync.js             # WebSocket sync events
-│       │   ├── useResizable.js        # Drag-to-resize list/reader divider
-│       │   ├── useIsMobile.js         # Viewport breakpoint detection (< 768px)
-│       │   ├── useMobileBackButton.js # Single hook: maps back button to overlay close
-│       │   ├── useSwipeToOpen.js      # Left-edge swipe to open the mobile drawer
-│       │   └── usePullToRefresh.js    # Pull-to-refresh on the mobile inbox
-│       ├── api/
-│       │   └── client.js        # Axios wrapper for all backend endpoints
-│       └── lib/
-│           ├── categories.js     # Triage category metadata + score badge styles
-│           └── company.js        # Email domain → brand color mapping
-├── start.sh                 # Dev launcher (backend :8000 + Vite :5173, HTTPS)
-├── mailmind                 # Single-command launcher (build + serve on :8000, HTTPS + LAN)
-├── install.sh               # One-shot bootstrap installer (Ollama, deps, mkcert)
-├── requirements.txt
-└── README.md
-```
-
-At runtime, MailMind creates `~/.mailmind/` containing:
-
-| File               | Contents                                              |
-|--------------------|-------------------------------------------------------|
-| `mailmind.db`      | SQLite — emails, accounts, settings.                  |
-| `accounts.json`    | Fernet-encrypted OAuth tokens (one blob per account). |
-| `triage_rules.md`  | Your custom importance rules (editable from Settings).|
-| `master.key`       | **Only if no OS keyring is available** — the fallback Fernet key (chmod 600). |
-
----
-
-## Configuration
-
-All config lives in the SQLite `settings` table and is editable from the UI:
-
-| Setting                | Default                  | What it does                                   |
-|------------------------|--------------------------|------------------------------------------------|
-| `sync_interval_minutes`| `5`                      | How often the background sync runs.            |
-| `initial_fetch_count`  | `500`                    | Emails pulled on first connect.                |
-| `ollama_base_url`      | `http://localhost:11434` | Ollama HTTP endpoint.                          |
-| `ollama_model`         | `hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` | Model used for triage. |
-| `auto_scan`            | `true`                   | Auto-triage new emails after each sync.        |
-| `importance_threshold` | `7`                      | Minimum score to appear in Important.          |
-| `mock_mode`            | `true`                   | Auto-disabled once a real account is connected. |
-| `dark_mode`            | `true`                   | Dark vs light theme.                           |
+If the phone can't reach the server at all: `sudo ufw allow 8000` on the machine running MailMind.
 
 ---
 
 ## How triage works
 
-For each unscored email, MailMind sends a structured prompt to Ollama. If you've
-written **custom triage rules** (in Settings, stored at
-`~/.mailmind/triage_rules.md`), they are prepended to the prompt so the model
-applies your criteria first:
+For each unscanned email, MailMind sends this to Ollama:
 
 ```
-{your custom rules, if any}
+{your custom triage rules, if any}
 
 You are an email importance classifier. Analyze this email and respond ONLY with valid JSON.
 
@@ -392,104 +172,73 @@ Respond with:
  "summary": "one paragraph summary of the email content"}
 ```
 
-The parser is defensive: it strips `` ```json `` fences, falls back to a
-regex `{...}` extraction, and clamps/sanitizes every field — so an occasionally
-chatty model never breaks the pipeline. Results are stored on the email row.
+The parser handles chatty models gracefully — it strips markdown fences, falls back to regex extraction, and clamps every field. A bad response never breaks the pipeline.
 
-### Model warmup & status
+### Writing your own rules
 
-On every startup, MailMind probes Ollama and preloads the configured model into
-RAM in a background thread. The **brain icon** in the sidebar reflects the status:
-
-| Dot color | Meaning | Action |
-|-----------|---------|--------|
-| 🟢 Green | Model ready | Scan will be fast. |
-| 🟡 Amber (pulsing) | Model loading | Wait or click to reload. |
-| 🔴 Red | Ollama unavailable / model not installed | Start Ollama or check model name in Settings. |
-
-### Custom triage rules
-
-Open **Settings → Triage Rules** to write plain-Markdown instructions that shape
-what the model considers important. For example:
+Go to **Settings → Triage Rules** and write plain Markdown:
 
 ```markdown
-# My priorities
-
-- Emails from my manager or direct reports are always important.
-- Pull-request review requests are important; GitHub notifications are not.
-- Receipts and invoices should be tagged "financial".
-- Ignore newsletters unless they mention "invoice" or "payment".
+- Emails from my manager are always important.
+- Job offer emails or recruiter emails with a role, company, and CTC score 9+.
+- Bank and financial transaction emails score 8+.
+- GitHub notifications are not important unless they mention me directly.
+- Newsletters score 1 unless they contain "invoice" or "payment".
 ```
 
-These are injected verbatim at the top of every triage prompt. They persist at
-`~/.mailmind/triage_rules.md` and survive restarts.
+These get prepended to every triage prompt. They're saved at `~/.mailmind/triage_rules.md` and survive restarts.
 
-If Ollama is **not running**, triage features disable gracefully: the "Scan"
-button reports the outage via toast, the status indicator shows red, and the
-rest of the app keeps working. While a scan runs, a floating progress bar
-appears at the bottom of the screen showing live `scanned/total` counts with a
-**Cancel** button to stop after the current batch.
+---
+
+## Configuration
+
+Everything is editable from the Settings UI:
+
+| Setting | Default | What it does |
+|---------|---------|--------------|
+| `sync_interval_minutes` | `5` | How often background sync runs |
+| `initial_fetch_count` | `500` | Emails pulled on first connect |
+| `ollama_base_url` | `http://localhost:11434` | Ollama endpoint |
+| `ollama_model` | `hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS` | Model for triage |
+| `auto_scan` | `true` | Auto-triage after each sync |
+| `importance_threshold` | `7` | Minimum score to show in Important |
+| `dark_mode` | `true` | Dark/light theme |
+
+Runtime files are stored in `~/.mailmind/`:
+
+| File | Contents |
+|------|----------|
+| `mailmind.db` | SQLite — emails, accounts, settings |
+| `accounts.json` | Fernet-encrypted OAuth tokens |
+| `triage_rules.md` | Your custom triage rules |
+| `master.key` | Fallback encryption key (only if no OS keyring is available, chmod 600) |
 
 ---
 
 ## Troubleshooting
 
-- **"credentials.json not found"** — you skipped step 1 of Setup. Drop the
-  Desktop OAuth JSON at `backend/credentials.json` and restart.
-- **Add Account hangs** — the OAuth flow blocks for up to 5 minutes waiting for
-  consent. Make sure popups/redirects to `localhost` aren't blocked.
-- **"needs reauth" badge** — your refresh token expired or was revoked. Remove
-  the account in Settings and re-add it.
-- **Triage "Ollama unavailable"** — start Ollama (`ollama serve` or the desktop
-  app) and confirm the model is pulled (`ollama list`). The brain icon in the
-  sidebar also lets you kick off a warmup.
-- **Model keeps unloading** — increase `OLLAMA_KEEP_ALIVE` before launching:
-  `OLLAMA_KEEP_ALIVE=30m ./mailmind`.
-- **Using a keyfile instead of a keyring** — on a headless box with no secret
-  service, MailMind falls back to `~/.mailmind/master.key` (chmod 600) and logs
-  a warning. For better security, install `gnome-keyring` or run a Secret
-  Service provider.
-- **Can't open on phone / LAN address times out** — the port is likely
-  firewalled. Allow it on the host machine: `sudo ufw allow 8000` (or whatever
-  port you started on). Also confirm the phone is on the same WiFi network.
-- **Browser shows a cert / "not secure" warning** — that's the self-signed
-  fallback cert (mkcert wasn't installed). It's safe to proceed; to silence it,
-  install mkcert (`mkcert -install`) and restart `./mailmind` — it will
-  regenerate `frontend/cert.pem` trusted by this machine. For the phone to trust
-  it too, install mkcert's root CA on the phone (see
-  [Trusted certificates](#trusted-certificates-on-other-devices)).
-- **"Add to Home screen" installs as a browser shortcut, not an app** — the PWA
-  install requires HTTPS, a web manifest, a maskable icon, and a service
-  worker. All of these are set up automatically; if the install still opens in
-  a browser tab, clear the site's storage (the old service worker is cached):
-  Chrome → site settings → Clear data, then re-open the HTTPS URL and try again.
-- **Stale UI after rebuilding the frontend** — the service worker precaches the
-  old bundle. Clear site data on the device / in Chrome, or do a hard refresh
-  (Ctrl-Shift-R) to force the new `sw.js`.
-- **Pull-to-refresh / back button stopped working on mobile** — these features
-  are bound to the live scroll element via callback refs; if a stale service
-  worker is serving an old bundle, clear site data (see above) and reload.
-- **Reset everything** — quit the app, delete `~/.mailmind/`, restart. You'll
-  need to re-add Gmail accounts.
+**"credentials.json not found"** — you skipped the OAuth setup step. Drop the Desktop OAuth JSON at `backend/credentials.json` and restart.
 
----
+**Add Account hangs** — the OAuth flow waits up to 5 minutes for browser consent. Make sure `localhost` redirects aren't blocked by a popup blocker.
 
-## Roadmap (deferred "extras")
+**"needs reauth" badge** — refresh token expired or was revoked. Remove the account in Settings and re-add it.
 
-These were intentionally left out of the first build and are easy to add on top
-of the current schema/hooks:
+**Triage says "Ollama unavailable"** — run `ollama serve` and confirm the model is pulled with `ollama list`. The brain icon in the sidebar also lets you kick off a warmup manually.
 
-- Thread view (group by `thread_id`)
-- Keyboard shortcuts (`j/k/Enter/u/i`)
-- Export Important emails as CSV/PDF
-- Triage history log table
-- Per-account sync pause toggle
-- Send / compose emails
+**Model keeps unloading** — increase the keep-alive timeout: `OLLAMA_KEEP_ALIVE=30m ./mailmind`
+
+**Phone can't connect to the LAN address** — allow the port through the firewall: `sudo ufw allow 8000`. Confirm both devices are on the same WiFi.
+
+**Browser shows a cert warning** — that's the self-signed fallback (mkcert wasn't installed). Safe to proceed, or install mkcert and restart to get a trusted cert. For the phone to trust it too, install mkcert's root CA on the phone (see above).
+
+**"Add to Home Screen" opens in a browser tab instead of standalone** — clear the site's storage in Chrome (site settings → Clear data), reopen the HTTPS URL, and try again.
+
+**Stale UI after updating** — the service worker cached the old bundle. Clear site data or do a hard refresh (`Ctrl-Shift-R`).
+
+**Reset everything** — quit the app, delete `~/.mailmind/`, restart. You'll need to re-add Gmail accounts.
 
 ---
 
 ## Privacy
 
-MailMind is single-user and local. The only outbound network calls are to
-`gmail.googleapis.com` (for mail) and your local Ollama (`localhost:11434`).
-No analytics, no third-party APIs.
+The only outbound network calls are to `gmail.googleapis.com` (your mail) and your local Ollama instance (`localhost:11434`). No analytics, no telemetry, no third-party APIs. Your emails never leave your machine.

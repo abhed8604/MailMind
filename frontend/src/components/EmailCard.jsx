@@ -84,7 +84,7 @@ export default function EmailCard({
         </span>
 
         {/* Timestamp */}
-        <span className="ml-auto shrink-0" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)' }}>
+        <span className="ml-auto shrink-0" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>
           {timestamp}
         </span>
 
@@ -139,7 +139,7 @@ export default function EmailCard({
                 fontSize: '9px',
                 fontWeight: 600,
                 padding: '1px 5px',
-                borderRadius: '3px',
+                borderRadius: '6px',
                 ...scoreBadgeStyle(score),
               }}
             >

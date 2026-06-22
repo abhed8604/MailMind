@@ -29,14 +29,20 @@ fail()  { echo "${RED}✗${RST} $*" >&2; }
 step()  { echo; echo "${CYAN}${BOLD}━━ $* ━━${RST}"; echo; }
 prompt() { echo -n "${DIM}$*${RST} "; }
 
+# Read a single-line answer from the user's terminal (not stdin).
+# When the script is run via `curl … | bash`, stdin is the pipe — so
+# a plain `read` would swallow the next line of the script instead of
+# waiting for keyboard input. Reading from /dev/tty fixes this.
+ask() { read -r "$@" < /dev/tty; }
+
 # ─── banner ─────────────────────────────────────────────────────────────────
 cat <<'BANNER'
 
-    __  ___      _ ____  ____           __
-   /  |/  /___ _(_) /  |/  (_)___  ____/ /
-  / /|_/ / __ `/ / / /|_/ / / __ \/ __  /
- / /  / / /_/ / / / /  / / / / / /_/ /
-/_/  /_/\__,_/_/_/_/  /_/_/_/ /_/\__,_/
+            __  ___      _ ____  ____           __
+           /  |/  /___ _(_) /  |/  (_)___  ____/ /
+          / /|_/ / __ `/ / / /|_/ / / __ \/ __  /
+         / /  / / /_/ / / / /  / / / / / /_/ /
+        /_/  /_/\__,_/_/_/_/  /_/_/_/ /_/\__,_/
 
        AI-Powered Email Triage . Bootstrap Installer
 
@@ -95,14 +101,14 @@ fi
 
 DEFAULT_DIR="$HOME/MailMind"
 prompt "Where should MailMind be installed? [$DEFAULT_DIR]"
-read -r INSTALL_DIR
+ask INSTALL_DIR
 INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
 INSTALL_DIR="$(eval echo "$INSTALL_DIR")"  # expand ~
 
 if $IN_REPO && [[ "$(cd "$SCRIPT_DIR" && pwd)" != "$(cd "$INSTALL_DIR" && pwd 2>/dev/null || true)" ]]; then
   warn "Note: you're running this from $SCRIPT_DIR which already looks like MailMind."
   prompt "  Use the current directory instead? [Y/n]"
-  read -r USE_CWD
+  ask USE_CWD
   case "${USE_CWD:-y}" in
     n*|N*) ;;  # keep user's choice
     *)    INSTALL_DIR="$SCRIPT_DIR" ;;
@@ -115,7 +121,7 @@ step "Fetching MailMind repository"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   warn "Directory $INSTALL_DIR already has a git repo."
   prompt "  Update with git pull? [Y/n]"
-  read -r DO_PULL
+  ask DO_PULL
   case "${DO_PULL:-y}" in
     n*|N*)
       warn "Skipping git pull. Using existing files."
@@ -152,7 +158,7 @@ else
       echo "  MailMind uses Ollama for AI triage."
       echo "  Installer: https://ollama.com/install.sh"
       prompt "  Install Ollama now? [Y/n]"
-      read -r INSTALL_OLLAMA
+      ask INSTALL_OLLAMA
       case "${INSTALL_OLLAMA:-y}" in
         n*|N*)
           warn "Skipping Ollama install. AI triage features will be unavailable until you install it."
@@ -172,7 +178,7 @@ else
     Darwin)
       if command -v brew >/dev/null 2>&1; then
         prompt "  Install Ollama via Homebrew? [Y/n]"
-        read -r INSTALL_OLLAMA
+        ask INSTALL_OLLAMA
         case "${INSTALL_OLLAMA:-y}" in
           n*|N*)
             warn "Skipping Ollama install. AI triage will be unavailable."
@@ -188,7 +194,7 @@ else
         echo "  2. Move the .app to /Applications"
         echo "  3. Open Ollama from Launchpad, then re-run this script."
         prompt "  Press Enter once Ollama is installed (or 's' to skip)…"
-        read -r OLLAMA_CONT
+        ask OLLAMA_CONT
         case "${OLLAMA_CONT:-}" in
           s*|S*) warn "Skipping Ollama install." ;;
           *) ;;
@@ -238,7 +244,7 @@ if [[ -n "${CHOSEN_MODEL:-}" ]] || command -v ollama >/dev/null 2>&1; then
   echo "  ${CYAN}5)${RST} Skip — I'll choose a model later"
   echo
   prompt "  Enter choice [1-5]"
-  read -r MODEL_CHOICE
+  ask MODEL_CHOICE
 
   case "${MODEL_CHOICE:-1}" in
     1) CHOSEN_MODEL="hf.co/unsloth/gemma-4-E2B-it-GGUF:IQ4_XS" ;;
@@ -397,7 +403,7 @@ except Exception:
 else
     warn "credentials.json exists but appears invalid."
     prompt "  Overwrite? [y/N]"
-    read -r OVERWRITE
+    ask OVERWRITE
     case "${OVERWRITE:-n}" in
       y*|Y*) ;;  # continue to wizard
       *)      warn "Keeping existing file. You can replace it manually at $CREDS_PATH";;
@@ -422,7 +428,7 @@ if [[ ! -f "$CREDS_PATH" ]] || [[ "${OVERWRITE:-}" =~ ^[Yy]$ ]]; then
   echo  "${RST}"
   # Read multi-line input until a line that is just "EOF"
   PASTE_INPUT=""
-  while IFS= read -r line; do
+  while IFS= read -r line < /dev/tty; do
     [[ "$line" == "EOF" ]] && break
     if [[ "$line" == "skip" ]] && [[ -z "$PASTE_INPUT" ]]; then
       warn "Skipping credentials setup."
@@ -527,7 +533,7 @@ echo "    cd $INSTALL_DIR"
 echo "    ./mailmind"
 echo
 prompt "Launch MailMind now? [Y/n]"
-read -r LAUNCH
+ask LAUNCH
 echo "${RST}"
 
 case "${LAUNCH:-y}" in

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import EmailCard from './EmailCard'
-import { SearchIcon } from './Icon'
+import { SearchIcon, LogoMark, MenuIcon } from './Icon'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 
 const FILTERS = [
@@ -56,7 +56,7 @@ export default function EmailList({
     >
       {/* Header: brand wordmark (mobile only) + title + search */}
       <div className="mm-mobile-brand">
-        <span className="mm-brand-mark">✦</span>
+        <LogoMark width={20} height={20} />
         <span className="mm-brand-name">MailMind</span>
       </div>
       <div className="px-3.5 pt-3 pb-2.5">
@@ -70,12 +70,7 @@ export default function EmailList({
               title="Open menu"
               onClick={onOpenMenu}
             >
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
+              <MenuIcon width={18} height={18} />
             </button>
           )}
           <h1 className="text-[14px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>
@@ -160,19 +155,19 @@ export default function EmailList({
         style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
       >
         {data.total > 0 ? (
-          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.22)' }}>
-            {(data.page - 1) * PAGE_SIZE + 1}–{Math.min(data.page * PAGE_SIZE, data.total)} of {data.total}
+          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.40)' }}>
+            {(data.page - 1) * PAGE_SIZE + 1}-{Math.min(data.page * PAGE_SIZE, data.total)} of {data.total}
             {data.total_pages > 1 && (
               <> · <button
                 onClick={() => onPageChange(Math.min(page + 1, data.total_pages))}
                 disabled={page >= data.total_pages}
                 className="underline disabled:opacity-30"
-                style={{ color: 'rgba(255,255,255,0.22)' }}
+                style={{ color: 'rgba(255,255,255,0.40)' }}
               >next</button></>
             )}
           </span>
         ) : (
-          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.22)' }}>0 emails</span>
+          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.40)' }}>0 emails</span>
         )}
       </div>
     </div>
@@ -190,7 +185,7 @@ function SearchBar({ value, onChange }) {
         padding: '6px 10px',
       }}
     >
-      <span className="mr-2 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>
+      <span className="mr-2 shrink-0" style={{ color: 'rgba(255,255,255,0.45)' }}>
         <SearchIcon />
       </span>
       <input
@@ -198,11 +193,10 @@ function SearchBar({ value, onChange }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search mail..."
-        className="bg-transparent flex-1 min-w-0 text-[12px] placeholder:opacity-100 focus:outline-none"
+        className="bg-transparent flex-1 min-w-0 text-[12px] focus:outline-none mm-search-input"
         style={{
           color: 'rgba(255,255,255,0.80)',
           minWidth: 0,
-          // placeholder color set via inline style for consistency
         }}
       />
     </div>
@@ -234,7 +228,7 @@ function EmptyState({ query, filter }) {
           ? 'No starred emails.'
           : 'This inbox is empty.'
   return (
-    <div className="p-6 text-center text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
+    <div className="p-6 text-center text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
       {reason}
     </div>
   )

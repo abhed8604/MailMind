@@ -26,9 +26,11 @@ export default {
         },
       },
       fontFamily: {
-        // System sans-serif per spec; weights 400 + 500 only elsewhere.
-        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // Skill §4.1: Inter discouraged as default. Self-hosted Geist Variable
+        // via @fontsource-variable/geist (imported in main.jsx). Falls back to
+        // the system stack for safety.
+        sans: ['"Geist Variable"', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['"Geist Mono Variable"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {
         bubble: '18px',

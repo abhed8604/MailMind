@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Sparkle } from '@phosphor-icons/react'
 import DOMPurify from 'dompurify'
 import ScanProgressBar from './ScanProgressBar'
 import { categoryMeta, relativeTime, scoreBadgeStyle } from '../lib/categories'
@@ -60,7 +61,7 @@ export default function EmailReader({
         className="flex-1 h-full flex flex-col items-center justify-center"
         style={{ background: amoled ? '#000000' : '#1a1a2e', position: 'relative' }}
       >
-        <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+        <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Select an email to read it.
         </span>
         <ScanProgressBar
@@ -84,7 +85,7 @@ export default function EmailReader({
     try {
       const { summary, email: updated } = await rescanEmail(email.id)
       if (summary?.unavailable) {
-        onToast?.error('Ollama unavailable — start it or check Settings.')
+        onToast?.error('Ollama unavailable. Start it or check Settings.')
       } else {
         onToast?.success(`Re-scanned. Score: ${updated.importance_score} · ${categoryMeta(updated.category).label}`)
         onRescanned?.(updated)
@@ -97,7 +98,7 @@ export default function EmailReader({
   }
 
   function notAvailable(action) {
-    onToast?.info(`${action} needs Gmail send/modify permissions — not wired up yet.`)
+    onToast?.info(`${action} needs Gmail send/modify permissions. Not wired up yet.`)
   }
 
   return (
@@ -122,15 +123,15 @@ export default function EmailReader({
                 padding: '2px 7px',
               }}
             >
-              {cat.emoji} {cat.label} · {email.category === 'spam' ? 'spam' : 'promotional'}
+              <cat.glyph size={11} weight="fill" color="rgba(255,255,255,0.45)" aria-hidden="true" /> {cat.label} · {email.category === 'spam' ? 'spam' : 'promotional'}
             </span>
           )}
           {(email.scanned_at || email.importance_score != null) && (
             <button
               onClick={handleRescan}
               disabled={rescanning}
-              className="text-[10px] uppercase tracking-wide transition-colors disabled:opacity-30"
-              style={{ color: 'rgba(255,255,255,0.25)' }}
+              className="text-[10px] uppercase tracking-wide transition-colors disabled:opacity-30 hover:text-white"
+              style={{ color: 'rgba(255,255,255,0.55)' }}
             >
               {rescanning ? 'Scanning…' : 'Rescan'}
             </button>
@@ -168,30 +169,33 @@ export default function EmailReader({
       {/* Wrapping these together lets the summary scroll away with the body on
           mobile, instead of pinning and eating screen space. */}
       <div className="flex-1 overflow-y-auto mm-email-scroll min-w-0" style={{ overflowX: 'hidden' }}>
-        {/* ---- EMAIL META BLOCK ---- */}
+        {/* ---- EMAIL META BLOCK ----
+            Hierarchy: subject (primary) → From/Date (secondary) → badges (footer).
+            Each tier steps down in weight + opacity so the eye lands on the
+            subject first, per skill §11.D lever 1 (typography refresh). */}
         <div
           className="mx-4 mt-3 mm-email-meta"
           style={{
             background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
-            borderRadius: '8px',
-            padding: '12px 14px',
+            borderRadius: 'var(--radius-surface)',
+            padding: '14px 16px',
           }}
         >
-          {/* Subject */}
-          <h1 style={{ fontSize: '15px', fontWeight: 500, color: 'rgba(255,255,255,0.88)', lineHeight: '1.3' }}>
+          {/* Subject — primary tier */}
+          <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', lineHeight: '1.3', letterSpacing: '-0.01em' }}>
             {email.subject || '(no subject)'}
           </h1>
 
-          {/* Meta rows: From / To / Date */}
-          <div className="mt-2 space-y-1">
+          {/* Meta rows — secondary tier */}
+          <div className="mt-2.5 space-y-1">
             <MetaRow label="From" value={`${senderLabel} <${email.sender_email || ''}>`} />
             <MetaRow label="Date" value={email.date ? new Date(email.date).toLocaleString() : ''} />
           </div>
 
-          {/* Badge row — score chip (left), spacer, account pill + star (right) */}
+          {/* Badge row — footer tier (divided, reduced weight) */}
           <div
-            className="flex items-center gap-2 mt-2"
-            style={{ paddingTop: 10, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
+            className="flex items-center gap-2 mt-3"
+            style={{ paddingTop: 'var(--space-sm)', borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
           >
             {/* Relevance score chip */}
             {score != null && (
@@ -200,7 +204,7 @@ export default function EmailReader({
                   fontSize: '10px',
                   fontWeight: 600,
                   padding: '2px 6px',
-                  borderRadius: '3px',
+                  borderRadius: 'var(--radius-chip)',
                   ...scoreBadgeStyle(score),
                 }}
               >
@@ -218,7 +222,7 @@ export default function EmailReader({
                 fontSize: '9px',
                 fontWeight: 500,
                 padding: '1px 6px',
-                borderRadius: '999px',
+                borderRadius: 'var(--radius-pill)',
                 background: acctRamp.pillBg,
                 color: acctRamp.color,
               }}
@@ -229,7 +233,7 @@ export default function EmailReader({
             {/* Star */}
             <span
               className="cursor-pointer shrink-0"
-              style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.15)', fontSize: '14px' }}
+              style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.30)', fontSize: '14px' }}
               onClick={() => onToggleStar?.(email)}
             >
               <StarIcon width={14} height={14} filled={email.is_starred} />
@@ -250,7 +254,7 @@ export default function EmailReader({
           >
             <div className="flex items-center gap-1.5 mb-1">
               <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(126, 170, 255, 0.6)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                ✨ AI Summary
+                <Sparkle size={11} weight="fill" style={{ verticalAlign: '-1px', marginRight: 4 }} aria-hidden="true" />AI Summary
               </span>
             </div>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.60)', lineHeight: '1.6', margin: 0 }}>
@@ -295,7 +299,7 @@ export default function EmailReader({
           style={{
             background: 'rgba(255,255,255,0.05)',
             border: '0.5px solid rgba(255,255,255,0.09)',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-surface)',
             padding: '8px 12px',
           }}
         >
@@ -314,7 +318,7 @@ export default function EmailReader({
           style={{
             width: 32,
             height: 32,
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-surface)',
             background: '#5B8DEF',
             color: '#fff',
           }}
@@ -331,10 +335,10 @@ export default function EmailReader({
 function MetaRow({ label, value }) {
   return (
     <div className="flex gap-2">
-      <span className="shrink-0" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.28)', width: 34 }}>
+      <span className="shrink-0" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', width: 34 }}>
         {label}
       </span>
-      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)' }}>
+      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)' }}>
         {value}
       </span>
     </div>
@@ -351,11 +355,11 @@ function ActionButton({ children, label, onClick, active }) {
       onClick={onClick}
       className="transition-colors"
       style={{
-        color: active ? '#f0a030' : 'rgba(255,255,255,0.30)',
+        color: active ? '#f0a030' : 'rgba(255,255,255,0.55)',
         background: 'transparent',
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.60)' }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.30)' }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.90)' }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}
     >
       {children}
     </button>
@@ -408,7 +412,10 @@ function EmailFrame({ html }) {
           margin: 0; padding: 0;
           background: transparent;
           color: rgba(255,255,255,0.60);
-          font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+          /* Sandboxed iframe (opaque origin) cannot access the parent's
+             self-hosted Geist. Fall back to the native system stack. No Google
+             Fonts <link> per skill §4.1. */
+          font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
           font-size: 13px; line-height: 1.75;
           word-wrap: break-word; overflow-wrap: anywhere;
           overflow-x: hidden;

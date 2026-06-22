@@ -23,7 +23,7 @@ export default function TriageBadge({ email, compact = false }) {
             border: `0.5px solid ${cat.color}55`,
           }}
         >
-          <span>{cat.emoji}</span>
+          <cat.glyph size={12} weight="fill" color={cat.color} aria-hidden="true" />
           {!compact && <span>{cat.label}</span>}
         </span>
       )}

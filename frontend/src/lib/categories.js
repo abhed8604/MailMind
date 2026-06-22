@@ -1,16 +1,22 @@
 // Category metadata + helpers. Kept in sync with backend.llm_triage.VALID_CATEGORIES.
 //
 // All visual treatments here use rgba() on white or the brand palette so they
-// read correctly over the glass surfaces and ambient orbs.
+// read correctly over the dark panels. Skill §3.D: emoji is discouraged by
+// default. Each category carries a Phosphor glyph component (rendered by the
+// caller as `<cat.glyph .../>`) tinted to `cat.color`, instead of a colorful
+// emoji. One icon family across the app (skill §3.C).
+import {
+  Warning, Clock, CurrencyDollar, At, Newspaper, Prohibit, Paperclip,
+} from '@phosphor-icons/react'
 
 export const CATEGORIES = {
-  action_required: { emoji: '🔴', label: 'Action',     color: '#4ecf8e' },
-  deadline:        { emoji: '⏰', label: 'Deadline',    color: '#f0a030' },
-  financial:       { emoji: '💰', label: 'Financial',   color: '#4ecf8e' },
-  personal:        { emoji: '✉️', label: 'Personal',    color: '#7eaaff' },
-  newsletter:      { emoji: '📰', label: 'Newsletter',  color: '#7eaaff' },
-  spam:            { emoji: '🚫', label: 'Spam',        color: '#f0a030' },
-  other:           { emoji: '📎', label: 'Other',       color: 'rgba(255,255,255,0.28)' },
+  action_required: { glyph: Warning,       label: 'Action',     color: '#4ecf8e' },
+  deadline:        { glyph: Clock,         label: 'Deadline',   color: '#f0a030' },
+  financial:       { glyph: CurrencyDollar, label: 'Financial', color: '#4ecf8e' },
+  personal:        { glyph: At,            label: 'Personal',   color: '#7eaaff' },
+  newsletter:      { glyph: Newspaper,     label: 'Newsletter', color: '#7eaaff' },
+  spam:            { glyph: Prohibit,      label: 'Spam',       color: '#f0a030' },
+  other:           { glyph: Paperclip,     label: 'Other',      color: 'rgba(255,255,255,0.28)' },
 }
 
 // Per-category tint fills. Flat rgba() values, no gradients.

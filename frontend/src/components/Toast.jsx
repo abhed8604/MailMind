@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import { Info, CheckCircle, WarningCircle, X } from '@phosphor-icons/react'
 
 const ToastCtx = createContext(null)
 
@@ -54,19 +55,19 @@ export function ToastProvider({ children }) {
 
 function ToastCard({ toast, onClose }) {
   const styles = {
-    info:    { bg: '#1a1a2e', border: 'rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.85)' },
+    info:    { bg: '#1a1a2e', border: 'rgba(255,255,255,0.09)', color: '#7eaaff' },
     success: { bg: '#1a1a2e', border: 'rgba(78,207,142,0.4)',    color: '#4ecf8e' },
     error:   { bg: '#1a1a2e', border: 'rgba(248,113,113,0.4)',   color: '#fca5a5' },
   }[toast.kind]
-  const icon = { info: 'ℹ️', success: '✅', error: '⚠️' }[toast.kind]
+  const Glyph = { info: Info, success: CheckCircle, error: WarningCircle }[toast.kind]
   return (
     <div
-      className="rounded-lg px-3 py-2.5 text-sm flex gap-2"
+      className="rounded-lg px-3 py-2.5 text-sm flex gap-2 items-start"
       style={{ background: styles.bg, border: `0.5px solid ${styles.border}`, color: styles.color }}
     >
-      <span>{icon}</span>
-      <span className="flex-1 leading-snug">{toast.message}</span>
-      <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.4)' }} aria-label="dismiss">✕</button>
+      <Glyph size={16} weight="fill" color={styles.color} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+      <span className="flex-1 leading-snug" style={{ color: 'rgba(255,255,255,0.85)' }}>{toast.message}</span>
+      <button onClick={onClose} style={{ color: 'rgba(255,255,255,0.4)' }} aria-label="dismiss"><X size={14} weight="bold" /></button>
     </div>
   )
 }

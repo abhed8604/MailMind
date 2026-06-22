@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { WarningCircle } from '@phosphor-icons/react'
+import { BackIcon } from './Icon'
 import {
   clearLocalData, deleteAccount, getAccounts, getSettings, startOAuth,
   testTriageConnection, updateSettings,
@@ -81,7 +83,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
       const res = await testTriageConnection()
       setConn(res)
       if (res.ok && res.model_available) {
-        onToast?.success(`Ollama up — model ${res.configured_model} available.`)
+        onToast?.success(`Ollama up. Model ${res.configured_model} available.`)
       } else if (res.ok) {
         onToast?.error(`Model ${res.configured_model} not pulled. Models present: ${res.models.join(', ') || 'none'}`)
       } else {
@@ -147,7 +149,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
       `Pulling can take several minutes for large models.`
     )) return
     setModelSwitching(true)
-    onToast?.info(`Pulling "${target}" — this may take a while…`)
+    onToast?.info(`Pulling "${target}". This may take a while…`)
     try {
       const res = await switchModel(target)
       setSettings((s) => ({ ...s, ollama_model: res.model }))
@@ -186,9 +188,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center transition-colors hover:text-white"
             style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.72)' }}
           >
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
+            <BackIcon width={14} height={14} />
           </button>
           <h1 className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.80)' }}>Settings</h1>
         </div>
@@ -218,7 +218,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-[12px] truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>{a.email}</div>
                   <div className="font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
-                    {a.needs_reauth ? '⚠ needs re-auth' : a.last_synced_at ? `synced ${new Date(a.last_synced_at).toLocaleString()}` : 'never synced'}
+                    {a.needs_reauth ? (<><WarningCircle size={11} weight="fill" color="#f0a030" style={{ verticalAlign: '-1px', marginRight: 3 }} aria-hidden="true" />needs re-auth</>) : a.last_synced_at ? `synced ${new Date(a.last_synced_at).toLocaleString()}` : 'never synced'}
                   </div>
                 </div>
                 <button
@@ -238,7 +238,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             onClick={handleAddAccount}
             disabled={!credentialsConfigured || oauthRunning}
             className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: '#f59e0b', color: '#0b0b12' }}
+            style={{ background: '#5B8DEF', color: '#ffffff' }}
           >
             {oauthRunning ? 'Waiting for consent…' : '+ Add Gmail Account'}
           </button>
@@ -282,7 +282,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               onClick={handleSwitchModel}
               disabled={modelSwitching || !pendingModel.trim()}
               className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: '#f59e0b', color: '#0b0b12' }}
+              style={{ background: '#5B8DEF', color: '#ffffff' }}
             >
               {modelSwitching ? 'Pulling… (this can take minutes)' : 'Delete & Pull New Model'}
             </button>
@@ -298,7 +298,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           {conn && (
             <div className="mt-1 text-[12px]" style={{ color: conn.ok ? '#4ecf8e' : '#fca5a5' }}>
               {conn.ok
-                ? `Connected. ${conn.models.length} model(s) available${conn.model_available ? '' : ` — but "${conn.configured_model}" is not one of them. Run: ollama pull ${conn.configured_model}`}.`
+                ? `Connected. ${conn.models.length} model(s) available${conn.model_available ? '' : `, but "${conn.configured_model}" is not one of them. Run: ollama pull ${conn.configured_model}`}.`
                 : `Unreachable: ${conn.error}`}
               {conn.ok && conn.models.length > 0 && (
                 <div className="mt-1 font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>{conn.models.join(' · ')}</div>
@@ -314,7 +314,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           <Field label={`Importance threshold (score ≥ ${settings.importance_threshold} shown in Important)`}>
             <input type="range" min={0} max={10} value={settings.importance_threshold}
               onChange={(e) => put({ importance_threshold: Number(e.target.value) })}
-              className="w-full" style={{ accentColor: '#f59e0b' }} />
+              className="w-full" style={{ accentColor: '#5B8DEF' }} />
           </Field>
         </Section>
 
@@ -332,7 +332,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               onClick={handleSaveRules}
               disabled={!rulesDirty || rulesBusy}
               className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: '#f59e0b', color: '#0b0b12' }}
+              style={{ background: '#5B8DEF', color: '#ffffff' }}
             >
               {rulesBusy ? 'Saving…' : 'Save Rules'}
             </button>
@@ -363,7 +363,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           color: rgba(255,255,255,0.80);
           transition: border-color 0.15s ease;
         }
-        .input::placeholder { color: rgba(255,255,255,0.3); }
+        .input::placeholder { color: rgba(255,255,255,0.50); }
         .input:focus { outline: none; border-color: #5B8DEF; }
         .input:disabled { opacity: 0.5; }
       `}</style>
@@ -377,7 +377,7 @@ function Section({ title, subtitle, children }) {
       style={{ background: 'rgba(255,255,255,0.04)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
       <div>
         <h2 className="text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.88)' }}>{title}</h2>
-        {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{subtitle}</p>}
+        {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -388,7 +388,7 @@ function Field({ label, sublabel, children }) {
   return (
     <label className="block">
       <span className="block text-[11px] mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{label}</span>
-      {sublabel && <span className="block text-[10px] mb-1.5" style={{ color: 'rgba(255,255,255,0.32)' }}>{sublabel}</span>}
+      {sublabel && <span className="block text-[10px] mb-1.5" style={{ color: 'rgba(255,255,255,0.50)' }}>{sublabel}</span>}
       {children}
     </label>
   )
@@ -403,7 +403,7 @@ function Select({ value, onChange, options }) {
 }
 
 function Toggle({ label, checked, onChange, activeColor }) {
-  const trackColor = activeColor || '#f59e0b'
+  const trackColor = activeColor || '#5B8DEF'
   return (
     <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => onChange(!checked)}>
       <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.80)' }}>{label}</span>
