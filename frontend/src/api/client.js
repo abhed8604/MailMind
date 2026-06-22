@@ -14,6 +14,9 @@ export const getEmail = (id) =>
 export const patchEmail = (id, body) =>
   api.patch(`/emails/${id}`, body).then((r) => r.data)
 
+export const getAnalytics = () =>
+  api.get('/emails/analytics').then((r) => r.data)
+
 // ---------------------------------------------------------------------------
 // Accounts
 // ---------------------------------------------------------------------------

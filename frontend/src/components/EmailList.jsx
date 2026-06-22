@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import EmailCard from './EmailCard'
 import { SearchIcon, LogoMark, MenuIcon } from './Icon'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
@@ -11,6 +11,10 @@ const FILTERS = [
 ]
 
 const PAGE_SIZE = 50
+
+function range(start, end) {
+  return Array.from({ length: end - start }, (_, i) => start + i)
+}
 
 const VIEW_TITLES = {
   inbox: 'Inbox',
@@ -33,10 +37,11 @@ export default function EmailList({
   page, onPageChange,
   view,
   style,
-  amoled,
   accountColorMap,
   onOpenMenu,
   onRefresh,
+  onScrollCapture,
+  savedScroll,
 }) {
   const accountsById = useMemo(
     () => Object.fromEntries(accounts.map((a) => [a.id, a])),
@@ -49,10 +54,22 @@ export default function EmailList({
   // remounts the div on every tab switch.
   const { pullDist, refCallback: listRefCallback } = usePullToRefresh({ onRefresh, threshold: 60 })
 
+  // Local ref to the scroll container, so we can both restore the saved
+  // scroll position on mount and capture the current position on scroll
+  // (forwarded to the parent so it survives the unmount that happens on
+  // mobile when the reader opens).
+  const scrollContainerRef = useRef(null)
+  useEffect(() => {
+    const node = scrollContainerRef.current
+    if (node && savedScroll && savedScroll.current > 0) {
+      node.scrollTop = savedScroll.current
+    }
+  }, [savedScroll])
+
   return (
     <div
       className="h-full flex flex-col min-w-0"
-      style={{ background: amoled ? '#000000' : '#16162a', ...style }}
+      style={{ background: 'var(--bg-list)', ...style }}
     >
       {/* Header: brand wordmark (mobile only) + title + search */}
       <div className="mm-mobile-brand">
@@ -73,7 +90,7 @@ export default function EmailList({
               <MenuIcon width={18} height={18} />
             </button>
           )}
-          <h1 className="text-[14px] font-medium truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>
+          <h1 className="text-[14px] font-medium truncate" style={{ color: 'var(--text-label)' }}>
             {VIEW_TITLES[view] || 'Inbox'}
           </h1>
         </div>
@@ -91,7 +108,7 @@ export default function EmailList({
               className="px-2.5 py-1 rounded-full transition-colors"
               style={{
                 fontSize: '11px',
-                color: active ? '#7eaaff' : 'rgba(255,255,255,0.32)',
+                color: active ? '#7eaaff' : 'var(--text-dim)',
                 background: active ? 'rgba(91,141,239,0.15)' : 'transparent',
               }}
             >
@@ -102,10 +119,16 @@ export default function EmailList({
       </div>
 
       {/* Divider below tabs */}
-      <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.05)' }} />
+      <div style={{ borderTop: '0.5px solid var(--border-subtle)' }} />
 
       {/* Scrollable email list — re-mounts on filter change to trigger animation */}
-      <div key={filter} ref={listRefCallback} className="flex-1 overflow-y-auto email-list-enter" style={{ position: 'relative' }}>
+      <div
+        key={filter}
+        ref={(node) => { scrollContainerRef.current = node; listRefCallback(node) }}
+        onScroll={(e) => { if (onScrollCapture) onScrollCapture(e.currentTarget.scrollTop) }}
+        className="flex-1 overflow-y-auto email-list-enter"
+        style={{ position: 'relative' }}
+      >
         {/* Pull-to-refresh spinner */}
         {pullDist > 0 && (
           <div
@@ -142,7 +165,6 @@ export default function EmailList({
               onClick={() => onSelectEmail(e)}
               onToggleRead={onToggleRead}
               onToggleStar={onToggleStar}
-              amoled={amoled}
               accountColorMap={accountColorMap}
             />
           ))
@@ -152,22 +174,43 @@ export default function EmailList({
       {/* Pagination footer */}
       <div
         className="px-3.5 py-2 text-center mm-list-footer"
-        style={{ borderTop: '0.5px solid rgba(255,255,255,0.06)' }}
+        style={{ borderTop: '0.5px solid var(--border)' }}
       >
         {data.total > 0 ? (
-          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.40)' }}>
+          <span className="text-[10px]" style={{ color: 'var(--text-preview)' }}>
             {(data.page - 1) * PAGE_SIZE + 1}-{Math.min(data.page * PAGE_SIZE, data.total)} of {data.total}
-            {data.total_pages > 1 && (
-              <> · <button
-                onClick={() => onPageChange(Math.min(page + 1, data.total_pages))}
-                disabled={page >= data.total_pages}
-                className="underline disabled:opacity-30"
-                style={{ color: 'rgba(255,255,255,0.40)' }}
-              >next</button></>
-            )}
           </span>
         ) : (
-          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.40)' }}>0 emails</span>
+          <span className="text-[10px]" style={{ color: 'var(--text-preview)' }}>0 emails</span>
+        )}
+        {data.total_pages > 1 && (
+          <div className="flex items-center justify-center gap-1 mt-1 flex-wrap">
+            {range(1, data.total_pages + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => onPageChange(p)}
+                className="rounded-md transition-colors"
+                style={{
+                  minWidth: 22,
+                  height: 22,
+                  fontSize: '10px',
+                  fontWeight: p === page ? 600 : 400,
+                  color: p === page ? '#7eaaff' : 'var(--text-dim)',
+                  background: p === page ? 'rgba(91,141,239,0.15)' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                }}
+                onMouseEnter={(e) => { if (p !== page) e.currentTarget.style.color = 'var(--text-label)' }}
+                onMouseLeave={(e) => { if (p !== page) e.currentTarget.style.color = 'var(--text-dim)' }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -180,12 +223,12 @@ function SearchBar({ value, onChange }) {
     <div
       className="flex items-center rounded-lg min-w-0"
       style={{
-        background: 'rgba(255,255,255,0.06)',
-        border: '0.5px solid rgba(255,255,255,0.09)',
+        background: 'var(--surface-fill)',
+        border: '0.5px solid var(--border-strong)',
         padding: '6px 10px',
       }}
     >
-      <span className="mr-2 shrink-0" style={{ color: 'rgba(255,255,255,0.45)' }}>
+      <span className="mr-2 shrink-0" style={{ color: 'var(--text-hint)' }}>
         <SearchIcon />
       </span>
       <input
@@ -195,7 +238,7 @@ function SearchBar({ value, onChange }) {
         placeholder="Search mail..."
         className="bg-transparent flex-1 min-w-0 text-[12px] focus:outline-none mm-search-input"
         style={{
-          color: 'rgba(255,255,255,0.80)',
+          color: 'var(--text-label)',
           minWidth: 0,
         }}
       />
@@ -210,7 +253,7 @@ function SkeletonRows() {
         <div
           key={i}
           className="skeleton"
-          style={{ height: 72, borderBottom: '0.5px solid rgba(255,255,255,0.04)', padding: '9px 14px' }}
+          style={{ height: 72, borderBottom: '0.5px solid var(--surface-hover)', padding: '9px 14px' }}
         />
       ))}
     </div>
@@ -228,7 +271,7 @@ function EmptyState({ query, filter }) {
           ? 'No starred emails.'
           : 'This inbox is empty.'
   return (
-    <div className="p-6 text-center text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+    <div className="p-6 text-center text-[12px]" style={{ color: 'var(--text-hint)' }}>
       {reason}
     </div>
   )

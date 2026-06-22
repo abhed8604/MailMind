@@ -18,7 +18,7 @@ import {
  * (add account, test connection, clear data, switch model) are explicit
  * buttons.
  */
-export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged, amoled, onAmoledChange, style, accountColorMap }) {
+export default function Settings({ onBack, onToast, onSettingsChanged, onAccountsChanged, theme, onThemeChange, style, accountColorMap }) {
   const [settings, setSettings] = useState(null)
   const [accounts, setAccounts] = useState([])
   const [credentialsConfigured, setCredentialsConfigured] = useState(false)
@@ -166,7 +166,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 
   if (!settings) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
+      <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: 'var(--text-dim)' }}>
         Loading settings…
       </div>
     )
@@ -175,7 +175,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
   return (
     <div
       className="h-full overflow-y-auto min-w-0"
-      style={{ background: amoled ? '#000000' : '#16162a', ...style }}
+      style={{ background: 'var(--bg-settings)', ...style }}
     >
       <div className="px-3.5 py-3 space-y-2">
 
@@ -185,22 +185,43 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             onClick={onBack}
             title="Back to inbox"
             aria-label="Back to inbox"
-            className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center transition-colors hover:text-white"
-            style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.09)', color: 'rgba(255,255,255,0.72)' }}
+            className="h-8 w-8 shrink-0 rounded-lg flex items-center justify-center transition-colors"
+            style={{ background: 'var(--surface-fill)', border: '0.5px solid var(--border-strong)', color: 'var(--text-sender)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-headline)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-sender)' }}
           >
             <BackIcon width={14} height={14} />
           </button>
-          <h1 className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.80)' }}>Settings</h1>
+          <h1 className="text-[14px] font-medium" style={{ color: 'var(--text-label)' }}>Settings</h1>
         </div>
 
-        {/* AMOLED toggle */}
-        <section className="rounded-lg px-3.5 py-2.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-          <Toggle
-            label="AMOLED mode"
-            checked={!!amoled}
-            onChange={(v) => onAmoledChange?.(v)}
-            activeColor="#5B8DEF"
-          />
+        {/* Theme picker — Default / Dark / Light / AMOLED */}
+        <section className="rounded-lg px-3.5 py-2.5" style={{ background: 'var(--surface-fill-subtle)' }}>
+          <div className="text-[12px] mb-2" style={{ color: 'var(--text-label)' }}>Theme</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { id: 'default', label: 'Default' },
+              { id: 'dark', label: 'Dark' },
+              { id: 'light', label: 'Light' },
+              { id: 'amoled', label: 'AMOLED' },
+            ].map((opt) => {
+              const active = (theme || 'default') === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => onThemeChange?.(opt.id)}
+                  className="rounded-lg px-3 py-2 text-[12px] font-medium transition-all"
+                  style={{
+                    background: active ? 'rgba(91,141,239,0.18)' : 'var(--surface-fill)',
+                    color: active ? '#7eaaff' : 'var(--text-label)',
+                    border: active ? '1px solid rgba(91,141,239,0.4)' : '1px solid var(--border-strong)',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
         </section>
 
         {/* Accounts */}
@@ -213,26 +234,26 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           )}
           <div className="space-y-1.5">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)' }}>
+              <div key={a.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: 'var(--surface-fill-subtle)' }}>
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ background: (accountColorMap && accountColorMap.get(a.id)?.color) || a.color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="font-mono text-[12px] truncate" style={{ color: 'rgba(255,255,255,0.80)' }}>{a.email}</div>
-                  <div className="font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>
+                  <div className="font-mono text-[12px] truncate" style={{ color: 'var(--text-label)' }}>{a.email}</div>
+                  <div className="font-mono text-[10px]" style={{ color: 'var(--text-dim)' }}>
                     {a.needs_reauth ? (<><WarningCircle size={11} weight="fill" color="#f0a030" style={{ verticalAlign: '-1px', marginRight: 3 }} aria-hidden="true" />needs re-auth</>) : a.last_synced_at ? `synced ${new Date(a.last_synced_at).toLocaleString()}` : 'never synced'}
                   </div>
                 </div>
                 <button
                   onClick={() => handleRemove(a.id, a.email)}
                   className="text-[11px] px-1.5 py-0.5 transition-colors"
-                  style={{ color: 'rgba(255,255,255,0.32)' }}
+                  style={{ color: 'var(--text-dim)' }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = '#fca5a5' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.32)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)' }}
                 >
                   Remove
                 </button>
               </div>
             ))}
-            {accounts.length === 0 && <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>No accounts yet.</p>}
+            {accounts.length === 0 && <p className="text-[12px]" style={{ color: 'var(--text-dim)' }}>No accounts yet.</p>}
           </div>
           <button
             onClick={handleAddAccount}
@@ -267,9 +288,9 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
               placeholder="gemma3:4b" className="input font-mono" />
           </Field>
           {/* Switch model: delete the current model and pull a new one */}
-          <div className="rounded-lg px-3 py-2.5 space-y-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-            <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
-              Switch model (deletes <span className="font-mono" style={{ color: 'rgba(255,255,255,0.80)' }}>{settings.ollama_model || 'current'}</span> and pulls a new one)
+          <div className="rounded-lg px-3 py-2.5 space-y-2" style={{ background: 'var(--surface-fill-subtle)' }}>
+            <div className="text-[11px]" style={{ color: 'var(--text-hint)' }}>
+              Switch model (deletes <span className="font-mono" style={{ color: 'var(--text-label)' }}>{settings.ollama_model || 'current'}</span> and pulls a new one)
             </div>
             <input
               value={pendingModel}
@@ -289,9 +310,9 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
           </div>
           <button onClick={handleTestConnection} disabled={busy === 'conn'}
             className="px-3 py-1.5 rounded-lg text-[12px] transition-colors disabled:opacity-40"
-            style={{ border: '0.5px solid rgba(255,255,255,0.09)', background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.72)' }}
-            onMouseEnter={(e) => { if (busy !== 'conn') e.currentTarget.style.color = 'rgba(255,255,255,1)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.72)' }}
+            style={{ border: '0.5px solid var(--border-strong)', background: 'var(--surface-fill-subtle)', color: 'var(--text-sender)' }}
+            onMouseEnter={(e) => { if (busy !== 'conn') e.currentTarget.style.color = 'var(--text-headline)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-sender)' }}
           >
             {busy === 'conn' ? 'Testing…' : 'Test Connection'}
           </button>
@@ -301,7 +322,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
                 ? `Connected. ${conn.models.length} model(s) available${conn.model_available ? '' : `, but "${conn.configured_model}" is not one of them. Run: ollama pull ${conn.configured_model}`}.`
                 : `Unreachable: ${conn.error}`}
               {conn.ok && conn.models.length > 0 && (
-                <div className="mt-1 font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>{conn.models.join(' · ')}</div>
+                <div className="mt-1 font-mono text-[10px]" style={{ color: 'var(--text-dim)' }}>{conn.models.join(' · ')}</div>
               )}
             </div>
           )}
@@ -336,7 +357,7 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
             >
               {rulesBusy ? 'Saving…' : 'Save Rules'}
             </button>
-            {rulesDirty && <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>Unsaved changes</span>}
+            {rulesDirty && <span className="text-[10px]" style={{ color: 'var(--text-dim)' }}>Unsaved changes</span>}
           </div>
         </Section>
 
@@ -355,15 +376,15 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
       <style>{`
         .input {
           width: 100%;
-          background: rgba(255,255,255,0.04);
-          border: 0.5px solid rgba(255,255,255,0.09);
+          background: var(--surface-fill-subtle);
+          border: 0.5px solid var(--border-strong);
           border-radius: 8px;
           padding: 7px 10px;
           font-size: 12px;
-          color: rgba(255,255,255,0.80);
+          color: var(--text-label);
           transition: border-color 0.15s ease;
         }
-        .input::placeholder { color: rgba(255,255,255,0.50); }
+        .input::placeholder { color: var(--text-muted); }
         .input:focus { outline: none; border-color: #5B8DEF; }
         .input:disabled { opacity: 0.5; }
       `}</style>
@@ -374,10 +395,10 @@ export default function Settings({ onBack, onToast, onSettingsChanged, onAccount
 function Section({ title, subtitle, children }) {
   return (
     <section className="rounded-lg px-3.5 py-2.5 space-y-2"
-      style={{ background: 'rgba(255,255,255,0.04)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      style={{ background: 'var(--surface-fill-subtle)', border: '0.5px solid var(--border)' }}>
       <div>
-        <h2 className="text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.88)' }}>{title}</h2>
-        {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{subtitle}</p>}
+        <h2 className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+        {subtitle && <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-hint)' }}>{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -387,8 +408,8 @@ function Section({ title, subtitle, children }) {
 function Field({ label, sublabel, children }) {
   return (
     <label className="block">
-      <span className="block text-[11px] mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{label}</span>
-      {sublabel && <span className="block text-[10px] mb-1.5" style={{ color: 'rgba(255,255,255,0.50)' }}>{sublabel}</span>}
+      <span className="block text-[11px] mb-1" style={{ color: 'var(--text-hint)' }}>{label}</span>
+      {sublabel && <span className="block text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>{sublabel}</span>}
       {children}
     </label>
   )
@@ -397,7 +418,7 @@ function Field({ label, sublabel, children }) {
 function Select({ value, onChange, options }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="input">
-      {options.map((o) => <option key={o.value} value={o.value} style={{ background: '#1a1a1a' }}>{o.label}</option>)}
+      {options.map((o) => <option key={o.value} value={o.value} style={{ background: 'var(--select-option-bg)' }}>{o.label}</option>)}
     </select>
   )
 }
@@ -406,10 +427,10 @@ function Toggle({ label, checked, onChange, activeColor }) {
   const trackColor = activeColor || '#5B8DEF'
   return (
     <div className="flex items-center justify-between gap-4 cursor-pointer" onClick={() => onChange(!checked)}>
-      <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.80)' }}>{label}</span>
+      <span className="text-[12px]" style={{ color: 'var(--text-label)' }}>{label}</span>
       <span
         className="relative h-5 w-9 rounded-full block pointer-events-none"
-        style={{ background: checked ? trackColor : 'rgba(255,255,255,0.12)' }}
+        style={{ background: checked ? trackColor : 'var(--border-strong)' }}
       >
         <span
           className="absolute top-0.5 h-4 w-4 rounded-full bg-white block"
@@ -423,6 +444,6 @@ function Toggle({ label, checked, onChange, activeColor }) {
 function Note({ kind = 'info', children }) {
   const styles = kind === 'warn'
     ? { border: '0.5px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.06)', color: '#fcd34d' }
-    : { border: '0.5px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.55)' }
+    : { border: '0.5px solid var(--border-strong)', background: 'var(--surface-fill-faint)', color: 'var(--text-hint)' }
   return <div className="text-[11px] rounded-lg px-2.5 py-1.5" style={styles}>{children}</div>
 }

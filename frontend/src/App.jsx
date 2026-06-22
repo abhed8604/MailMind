@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar'
 import EmailList from './components/EmailList'
 import EmailReader from './components/EmailReader'
 import Settings from './components/Settings'
+import Dashboard from './components/Dashboard'
 import { ToastProvider, useToast } from './components/Toast'
 import { useEmails } from './hooks/useEmails'
 import { useSync } from './hooks/useSync'
@@ -34,14 +35,31 @@ function MailMind() {
     onOpen: () => setSidebarOpen(true),
   })
 
-  // AMOLED mode — persisted to localStorage
-  const [amoled, setAmoled] = useState(() => {
-    try { return localStorage.getItem('amoled_mode') === 'true' } catch { return false }
+  // Theme — four palettes: default (current dark), dark, light, amoled.
+  // Stored in localStorage and applied via the data-theme attribute on
+  // .app-shell so the whole app re-themes from CSS variables.
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('app_theme') || 'default' } catch { return 'default' }
   })
-  const handleAmoledChange = useCallback((v) => {
-    setAmoled(v)
-    try { localStorage.setItem('amoled_mode', String(v)) } catch { /* ignore */ }
+  const handleThemeChange = useCallback((v) => {
+    setTheme(v)
+    try { localStorage.setItem('app_theme', v) } catch { /* ignore */ }
   }, [])
+  // Sync data-theme to <html> so body and any elements outside .app-shell
+  // (e.g. the FOUC-prevention script in index.html) pick up the CSS variables.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    // Update browser chrome colors to match the active theme.
+    const bgMap = { default: '#0e0e1a', dark: '#121212', light: '#faf6f0', amoled: '#000000' }
+    const themeColor = document.querySelector('meta[name="theme-color"]')
+    if (themeColor) themeColor.setAttribute('content', bgMap[theme] || '#0e0e1a')
+    // iOS PWA: light theme needs dark status-bar text; dark themes need translucent.
+    const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+    if (statusBar) statusBar.setAttribute('content', theme === 'light' ? 'default' : 'black-translucent')
+  }, [theme])
+  // amoled is now derived from the theme value so components that still
+  // expect an `amoled` prop keep working until they're fully converted.
+  const amoled = theme === 'amoled'
 
   // Inbox state
   const [filter, setFilter] = useState('important')
@@ -52,12 +70,43 @@ function MailMind() {
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [bodyLoading, setBodyLoading] = useState(false)
 
+  // Preserves the email-list scroll position across the mobile reader
+  // open/close cycle. When the reader opens the EmailList unmounts; when it
+  // closes it remounts and we restore scrollTop from this ref.
+  const listScrollRef = useRef(0)
+  const captureListScroll = useCallback((top) => { listScrollRef.current = top }, [])
+
   // Triage state
   const [scanRunning, setScanRunning] = useState(false)
   const [scanProgress, setScanProgress] = useState({ scanned: 0, total: 0 })
   const scanTimer = useRef(null)
   const [scanTick, setScanTick] = useState(0)
   const [syncTick, setSyncTick] = useState(0)
+
+  // Background poll counter — bumped every 45s while the inbox is visible and
+  // the tab is in the foreground. Drives a silent re-fetch of the email list
+  // so read/starred changes from other devices propagate without a manual
+  // refresh. Pauses when the user leaves the inbox view or hides the tab.
+  const [pollTick, setPollTick] = useState(0)
+  useEffect(() => {
+    if (view !== 'inbox') return
+    const tickIfVisible = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        setPollTick((t) => t + 1)
+      }
+    }
+    const id = setInterval(tickIfVisible, 45000)
+    const onVis = () => { if (document.visibilityState === 'visible') tickIfVisible() }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVis)
+    }
+    return () => {
+      clearInterval(id)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVis)
+      }
+    }
+  }, [view])
 
   // LLM model status — mirrors the backend warmup state.
   const [modelStatus, setModelStatus] = useState('unknown')
@@ -117,10 +166,14 @@ function MailMind() {
 
   // ---- emails hook -------------------------------------------------------
   // The tab filter is sent directly to the API (all|unread|important|starred).
+  // refreshKey also includes pollTick so the list re-fetches every ~45s while
+  // the tab is visible and the inbox is open. This picks up read/starred
+  // changes made on other devices or directly in Gmail (the backend's
+  // periodic sync now reconciles those label changes).
   const apiFilter = filter
   const { data, loading, error, toggleRead, toggleStar, markReadLocally, setData } = useEmails({
     filter: apiFilter, q: debouncedQuery, account: selectedAccount, page,
-    refreshKey: scanTick + syncTick,
+    refreshKey: scanTick + syncTick + pollTick,
   })
 
   // On desktop the API already handles tab filtering. On mobile the same
@@ -252,7 +305,8 @@ function MailMind() {
   const accountsById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
   const accountColorMap = useMemo(() => buildAccountColorMap(accounts), [accounts])
 
-  const showInbox = view !== 'settings'
+  const showInbox = view === 'inbox'
+  const showDashboard = view === 'dashboard'
 
   // Draggable divider between the list panel and the reading pane.
   const { leftPct, onPointerDown: onDividerDown, dragging } = useResizable({ initial: 38, min: 20, max: 70 })
@@ -268,6 +322,7 @@ function MailMind() {
     { isOpen: readerOpen, close: () => setSelectedEmail(null) },
     { isOpen: sidebarOpen && !readerOpen, close: () => setSidebarOpen(false) },
     { isOpen: view === 'settings' && !readerOpen && !sidebarOpen, close: () => setView('inbox') },
+    { isOpen: view === 'dashboard' && !readerOpen && !sidebarOpen, close: () => setView('inbox') },
   ])
 
   // Switching view via the sidebar should close the mobile drawer.
@@ -288,7 +343,6 @@ function MailMind() {
     modelStatus,
     modelBusy,
     onWarmupModel: handleWarmupModel,
-    amoled,
     accounts,
     selectedAccount,
     onSelectAccount: handleSelectAccount,
@@ -315,7 +369,6 @@ function MailMind() {
           toast.error(`Cancel failed: ${e.message}`)
         }
       }}
-      amoled={amoled}
       accountColorMap={accountColorMap}
     />
   )
@@ -326,7 +379,7 @@ function MailMind() {
   // On Settings there's no hamburger — the back button already exits.
   if (isMobile) {
     return (
-      <div className={`app-shell${amoled ? ' amoled' : ''}`}>
+      <div className="app-shell" data-theme={theme}>
         {/* Drawer sidebar */}
         {sidebarOpen && (
           <>
@@ -340,7 +393,7 @@ function MailMind() {
         {showInbox ? (
           // Only ONE of list/reader visible at a time on mobile.
           readerOpen ? (
-            <div className={`mobile-reader-overlay${amoled ? ' amoled' : ''}`}>
+            <div className="mobile-reader-overlay">
               {reader}
             </div>
           ) : (
@@ -363,13 +416,21 @@ function MailMind() {
                 onPageChange={setPage}
                 view="inbox"
                 style={{ flex: '1 1 0%' }}
-                amoled={amoled}
                 accountColorMap={accountColorMap}
                 onOpenMenu={() => setSidebarOpen(true)}
                 onRefresh={syncNow}
+                savedScroll={listScrollRef}
+                onScrollCapture={captureListScroll}
               />
             </div>
           )
+        ) : showDashboard ? (
+          <div className="mm-mobile-list-top" style={{ flex: '1 1 0%', minHeight: 0 }}>
+            <Dashboard
+              onBack={() => setView('inbox')}
+              style={{ flex: '1 1 0%' }}
+            />
+          </div>
         ) : (
           <div className="mm-mobile-list-top" style={{ flex: '1 1 0%', minHeight: 0 }}>
             <Settings
@@ -377,8 +438,8 @@ function MailMind() {
               onToast={toast}
               onSettingsChanged={(s) => setSettings((cur) => ({ ...cur, ...s }))}
               onAccountsChanged={refreshAccounts}
-              amoled={amoled}
-              onAmoledChange={handleAmoledChange}
+              theme={theme}
+              onThemeChange={handleThemeChange}
               style={{ flex: '1 1 0%' }}
               accountColorMap={accountColorMap}
             />
@@ -390,7 +451,7 @@ function MailMind() {
 
   // ---- DESKTOP LAYOUT ----------------------------------------------------
   return (
-    <div className={`app-shell${amoled ? ' amoled' : ''}`}>
+    <div className="app-shell" data-theme={theme}>
       {/* 3-column flex layout: fixed sidebar + resizable list/reader area */}
       <div className="flex h-full w-full">
         <Sidebar {...sidebarProps} />
@@ -417,16 +478,11 @@ function MailMind() {
                 page={page}
                 onPageChange={setPage}
                 view="inbox"
-                style={{
-                  flex: `0 0 ${leftPct}%`,
-                  transform: readerOpen ? 'translateX(0)' : `translateX(${(100 - leftPct) / (2 * leftPct) * 100}%)`,
-                  transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
-                  overflow: 'hidden',
-                  willChange: 'transform',
-                }}
-                amoled={amoled}
+                style={{ flex: `0 0 ${leftPct}%`, overflow: 'hidden' }}
                 accountColorMap={accountColorMap}
                 onRefresh={syncNow}
+                savedScroll={listScrollRef}
+                onScrollCapture={captureListScroll}
               />
               <div
                 className="resize-divider"
@@ -436,37 +492,27 @@ function MailMind() {
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="Resize panels"
-                style={{
-                  flex: `0 0 ${readerOpen ? 4 : 0}px`,
-                  flexShrink: 0,
-                  opacity: readerOpen ? 1 : 0,
-                  overflow: 'hidden',
-                  pointerEvents: readerOpen ? 'auto' : 'none',
-                  transition: 'flex 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease',
-                }}
+                style={{ flex: '0 0 4px', flexShrink: 0 }}
               />
-              {/* Reading pane — slides in from right when an email is selected.
-                  Uses transform (GPU compositor) in sync with the list's transform
-                  so both slide together as one smooth motion. */}
-              <div style={{
-                flex: `0 0 calc(${100 - leftPct}% - ${readerOpen ? 4 : 0}px)`,
-                transform: readerOpen ? 'translateX(0)' : 'translateX(100%)',
-                opacity: readerOpen ? 1 : 0,
-                overflow: 'hidden',
-                transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease',
-                willChange: 'transform',
-              }}>
+              {/* Reading pane — always visible alongside the list. Shows a
+                  placeholder when no email is selected. */}
+              <div style={{ flex: '1 1 0%', overflow: 'hidden', minWidth: 0 }}>
                 {reader}
               </div>
             </>
+          ) : showDashboard ? (
+            <Dashboard
+              onBack={() => setView('inbox')}
+              style={{ flex: '1 1 0%', maxWidth: 980, margin: '0 auto' }}
+            />
           ) : (
             <Settings
               onBack={() => setView('inbox')}
               onToast={toast}
               onSettingsChanged={(s) => setSettings((cur) => ({ ...cur, ...s }))}
               onAccountsChanged={refreshAccounts}
-              amoled={amoled}
-              onAmoledChange={handleAmoledChange}
+              theme={theme}
+              onThemeChange={handleThemeChange}
               style={{ flex: '1 1 0%', maxWidth: 760, margin: '0 auto' }}
               accountColorMap={accountColorMap}
             />

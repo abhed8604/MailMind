@@ -31,6 +31,7 @@ import {
   Paperclip,
   List,
   CaretLeft,
+  ChartBar,
 } from '@phosphor-icons/react'
 
 /** Mail / inbox mark. */
@@ -66,6 +67,11 @@ export function BrainIcon(props) {
 /** Settings / gear. */
 export function SettingsIcon(props) {
   return <Gear weight="regular" {...props} />
+}
+
+/** Dashboard / analytics (bar chart). */
+export function DashboardIcon(props) {
+  return <ChartBar weight="regular" {...props} />
 }
 
 /** Star — toggles filled via the `filled` prop (semantic "starred" state). */

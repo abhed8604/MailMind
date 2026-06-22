@@ -6,12 +6,12 @@ import { StarIcon } from './Icon'
  * Email list row — flat card with two sub-rows and a bottom meta strip.
  *
  * TOP ROW — sender name (left) + account pill + timestamp (right):
- *   Unread: 12px font-weight 600, blue dot (6px #5B8DEF), color rgba(255,255,255,0.88)
- *   Read:   12px font-weight 400, no dot, color rgba(255,255,255,0.40)
+ *   Unread: 12px font-weight 600, blue dot (6px #5B8DEF), primary text colour
+ *   Read:   12px font-weight 400, no dot, dimmed text colour
  *
  * PREVIEW — 2-line clamp, 11px:
- *   Unread: color rgba(255,255,255,0.50)
- *   Read:   color rgba(255,255,255,0.28)
+ *   Unread: preview colour
+ *   Read:   faint colour
  *
  * BOTTOM ROW — relevance score chip (left) + star icon (right)
  *
@@ -23,7 +23,7 @@ import { StarIcon } from './Icon'
  */
 export default function EmailCard({
   email, account, active, onClick, onToggleRead, onToggleStar,
-  amoled, accountColorMap,
+  accountColorMap,
 }) {
   const unread = !email.is_read
   const scanned = email.scanned_at != null || email.importance_score != null
@@ -37,16 +37,16 @@ export default function EmailCard({
   const timestamp = relativeTime(email.date)
   const score = email.importance_score
 
-  // Row-level border + background (AMOLED-aware)
+  // Row-level border + background
   const rowBg = active
-    ? (amoled ? 'rgba(91,141,239,0.08)' : 'rgba(91,141,239,0.12)')
+    ? 'rgba(91,141,239,0.12)'
     : unread
-      ? (amoled ? 'rgba(91,141,239,0.04)' : 'rgba(91,141,239,0.05)')
+      ? 'rgba(91,141,239,0.05)'
       : 'transparent'
   const borderLeft = (active || unread)
     ? '3px solid #5B8DEF'
     : '3px solid transparent'
-  const hoverBg = amoled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)'
+  const hoverBg = 'var(--surface-hover)'
 
   return (
     <button
@@ -56,7 +56,7 @@ export default function EmailCard({
         padding: '9px 14px',
         background: rowBg,
         borderLeft,
-        borderBottom: '0.5px solid rgba(255,255,255,0.04)',
+        borderBottom: '0.5px solid var(--surface-hover)',
         cursor: 'pointer',
       }}
       onMouseEnter={(e) => {
@@ -77,14 +77,14 @@ export default function EmailCard({
           style={{
             fontSize: '12px',
             fontWeight: unread ? 600 : 400,
-            color: unread ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.40)',
+            color: unread ? 'var(--text-primary)' : 'var(--text-preview)',
           }}
         >
           {senderName}
         </span>
 
         {/* Timestamp */}
-        <span className="ml-auto shrink-0" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>
+        <span className="ml-auto shrink-0" style={{ fontSize: '10px', color: 'var(--text-hint)' }}>
           {timestamp}
         </span>
 
@@ -112,7 +112,7 @@ export default function EmailCard({
         className="mt-0.5 overflow-hidden break-words"
         style={{
           fontSize: '11px',
-          color: unread ? 'rgba(255,255,255,0.50)' : 'rgba(255,255,255,0.28)',
+          color: unread ? 'var(--text-muted)' : 'var(--text-faint)',
           lineHeight: '1.4',
         }}
       >
@@ -123,7 +123,7 @@ export default function EmailCard({
       {!scanned && (
         <div className="flex items-center gap-1.5 mt-1">
           <span className="spinner" />
-          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             Analyzing…
           </span>
         </div>
@@ -151,7 +151,7 @@ export default function EmailCard({
           {/* Star icon */}
           <span
             className="cursor-pointer"
-            style={{ fontSize: '12px', color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.15)' }}
+            style={{ fontSize: '12px', color: email.is_starred ? '#f0a030' : 'var(--border-strong)' }}
             onClick={(ev) => { ev.stopPropagation(); onToggleStar?.(email) }}
             title={email.is_starred ? 'Unstar' : 'Star'}
           >

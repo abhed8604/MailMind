@@ -1,11 +1,12 @@
 """Email list / detail / mutation endpoints."""
 from __future__ import annotations
 
+import datetime as _dt
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 
 from ..database import Email, get_db, get_setting
@@ -81,6 +82,78 @@ def list_emails(
         "page_size": PAGE_SIZE,
         "total": total,
         "total_pages": (total + PAGE_SIZE - 1) // PAGE_SIZE if total else 0,
+        "importance_threshold": threshold,
+    }
+
+
+@router.get("/analytics")
+def email_analytics(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Aggregate analytics over all cached emails.
+
+    Returns:
+      * ``summary`` — total / read / unread / starred / important counts
+      * ``categories`` — count per triage category
+      * ``trend`` — email volume per day for the last 30 days
+    """
+    threshold = get_setting(db, "importance_threshold")
+
+    total = int(db.execute(select(func.count()).select_from(Email)).scalar() or 0)
+    read = int(db.execute(
+        select(func.count()).select_from(Email).where(Email.is_read.is_(True))
+    ).scalar() or 0)
+    unread = total - read
+    starred = int(db.execute(
+        select(func.count()).select_from(Email).where(Email.is_starred.is_(True))
+    ).scalar() or 0)
+    important = int(db.execute(
+        select(func.count()).select_from(Email).where(Email.important.is_(True))
+    ).scalar() or 0)
+
+    # Category distribution. Emails with no category yet count as "unscanned".
+    cat_rows = db.execute(
+        select(Email.category, func.count())
+        .group_by(Email.category)
+    ).all()
+    categories: dict[str, int] = {}
+    scanned_total = 0
+    for cat, cnt in cat_rows:
+        key = cat or "unscanned"
+        categories[key] = categories.get(key, 0) + int(cnt or 0)
+        if cat is not None:
+            scanned_total += int(cnt or 0)
+    categories.setdefault("unscanned", 0)
+
+    # 30-day volume trend (by date, UTC). Uses SQLite's date() over the ISO
+    # timestamp string so grouping by calendar day works without Python-side
+    # date casting (which fails on SQLite's stored ISO format).
+    since = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=30)
+    trend_rows = db.execute(
+        select(func.date(Email.date).label("d"), func.count())
+        .where(Email.date.is_not(None), Email.date >= since)
+        .group_by("d")
+        .order_by("d")
+    ).all()
+    by_day = {str(row[0]): int(row[1]) for row in trend_rows}
+
+    # Fill every day in the range so the chart has no gaps.
+    trend = []
+    cur = (since).date()
+    end = _dt.datetime.now(_dt.timezone.utc).date()
+    while cur <= end:
+        trend.append({"date": cur.isoformat(), "count": by_day.get(cur.isoformat(), 0)})
+        cur += _dt.timedelta(days=1)
+
+    return {
+        "summary": {
+            "total": total,
+            "read": read,
+            "unread": unread,
+            "starred": starred,
+            "important": important,
+            "scanned": scanned_total,
+        },
+        "categories": categories,
+        "trend": trend,
         "importance_threshold": threshold,
     }
 

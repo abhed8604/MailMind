@@ -72,13 +72,46 @@ trap cleanup EXIT INT TERM
 CERT_DIR="$ROOT/frontend"
 CERT="$CERT_DIR/cert.pem"
 KEY="$CERT_DIR/key.pem"
-if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
-  LAN_IP_TEMP=$(hostname -I 2>/dev/null | awk '{print $1}')
+
+# current_lan_ip — detect the machine's LAN IP.
+current_lan_ip() {
+  hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+# cert_covers_ip — check if the cached cert's SANs include the given IP.
+# Returns 0 (true) if the IP is found, 1 (false) otherwise.
+cert_covers_ip() {
+  local ip="$1"
+  [[ -z "$ip" ]] && return 1
+  [[ ! -f "$CERT" ]] && return 1
+  # Extract SANs and grep for the IP (matches both IP:x.x.x.x and bare IP).
+  openssl x509 -noout -ext subjectAltName -in "$CERT" 2>/dev/null \
+    | grep -q "$ip"
+}
+
+# needs_cert_regen — true if cert is missing or doesn't cover current LAN IP.
+needs_cert_regen() {
+  if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
+    return 0
+  fi
+  local lan
+  lan=$(current_lan_ip)
+  if [[ -n "$lan" ]] && ! cert_covers_ip "$lan"; then
+    echo "⚠ LAN IP changed to $lan — regenerating TLS certificate…"
+    return 0
+  fi
+  return 1
+}
+
+if needs_cert_regen; then
+  LAN_IP_TEMP=$(current_lan_ip)
   if [[ -n "$LAN_IP_TEMP" ]]; then
     CERT_HOSTS="localhost 127.0.0.1 $LAN_IP_TEMP"
   else
     CERT_HOSTS="localhost 127.0.0.1"
   fi
+  # Remove stale certs so mkcert/openssl don't append to existing files.
+  rm -f "$CERT" "$KEY"
   if command -v mkcert >/dev/null 2>&1; then
     echo "→ Generating trusted TLS certificate via mkcert…"
     mkcert -install 2>/dev/null
@@ -90,10 +123,14 @@ if [[ ! -f "$CERT" || ! -f "$KEY" ]]; then
     echo "→ mkcert not found — generating self-signed cert (browser will warn)…"
     echo "  For a warning-free experience, install mkcert:"
     echo "  https://github.com/FiloSottile/mkcert"
+    SAN_EXT="DNS:localhost,IP:127.0.0.1"
+    if [[ -n "$LAN_IP_TEMP" ]]; then
+      SAN_EXT="$SAN_EXT,IP:$LAN_IP_TEMP"
+    fi
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
       -keyout "$KEY" -out "$CERT" -days 3650 -nodes \
-      -subj "/CN=MailMind" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
-      2>/dev/null
+      -subj "/CN=MailMind" -addext "subjectAltName=$SAN_EXT" \
+    2>/dev/null
     echo "✓ Certificate saved to $CERT"
   fi
 fi

@@ -1,14 +1,36 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <meta name="theme-color" content="#0e0e1a" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <title>MailMind</title>
+    <!-- Apply the saved theme's body background before paint so there is no
+         dark->light flash on load. Also sets theme-color and iOS status-bar
+         style so the browser chrome matches the theme immediately. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('app_theme') || 'default';
+          var bg = {
+            default: '#0e0e1a',
+            dark: '#121212',
+            light: '#faf6f0',
+            amoled: '#000000'
+          }[t] || '#0e0e1a';
+          document.documentElement.style.background = bg;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', bg);
+          var sb = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          if (sb) sb.setAttribute('content', t === 'light' ? 'default' : 'black-translucent');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

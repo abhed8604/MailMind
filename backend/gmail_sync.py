@@ -282,17 +282,50 @@ def incremental_sync(account: Account) -> dict[str, Any]:
         return {"account": account.email, "fetched": count, "mode": "initial_fallback"}
 
     added: list[str] = []
+    # Track label-state changes (read/starred) per gmail message id so we can
+    # reconcile the local DB with changes made in Gmail or on another device.
+    # Each value is the set of label operations to apply. label_changes[id] =
+    # {"add": set(), "remove": set()} accumulated across all history records.
+    label_changes: dict[str, dict[str, set]] = {}
     page_token: str | None = None
     while True:
         req = service.users().history().list(
-            userId="me", startHistoryId=since, pageToken=page_token
+            userId="me", startHistoryId=since, pageToken=page_token,
+            # Request label-change history in addition to new-message history.
+            # Without historyTypes the API may still return them, but being
+            # explicit guarantees labelChanged records are included.
+            historyTypes=["messageAdded", "labelAdded", "labelRemoved"],
         )
         resp = _with_backoff(req.execute)
         for hist in resp.get("history", []):
+            # New messages.
             for added_msg in hist.get("messagesAdded", []):
                 msg = added_msg.get("message") or {}
                 if msg.get("id"):
                     added.append(msg["id"])
+            # Label added (e.g. user marked as read -> UNREAD removed, or
+            # starred -> STARRED added). Gmail splits these into two record
+            # types: labelAdded and labelRemoved.
+            for ch in hist.get("labelsAdded", []):
+                msg = ch.get("message") or {}
+                mid = msg.get("id")
+                if not mid:
+                    continue
+                labels = ch.get("labelIds") or []
+                entry = label_changes.setdefault(mid, {"add": set(), "remove": set()})
+                for lbl in labels:
+                    entry["add"].add(lbl)
+                    entry["remove"].discard(lbl)
+            for ch in hist.get("labelsRemoved", []):
+                msg = ch.get("message") or {}
+                mid = msg.get("id")
+                if not mid:
+                    continue
+                labels = ch.get("labelIds") or []
+                entry = label_changes.setdefault(mid, {"add": set(), "remove": set()})
+                for lbl in labels:
+                    entry["remove"].add(lbl)
+                    entry["add"].discard(lbl)
         page_token = resp.get("nextPageToken")
         if not page_token:
             break
@@ -301,9 +334,57 @@ def incremental_sync(account: Account) -> dict[str, Any]:
     added = list(dict.fromkeys(added))
     with SessionLocal() as db:
         count = _store_messages(db, account, added, service)
+        # Reconcile read/starred state from label changes captured above.
+        reconciled = _apply_label_changes(db, account, label_changes)
         _update_history_and_sync(db, account, service, now)
-    log.info("incremental_sync(%s): +%d messages", account.email, count)
-    return {"account": account.email, "fetched": count, "mode": "incremental"}
+    log.info("incremental_sync(%s): +%d messages, %d label updates",
+             account.email, count, reconciled)
+    return {"account": account.email, "fetched": count,
+            "label_updates": reconciled, "mode": "incremental"}
+
+
+def _apply_label_changes(db: Session, account: Account,
+                         label_changes: dict[str, dict[str, set]]) -> int:
+    """Apply read/starred label changes captured from Gmail history to the
+    local DB. Returns the number of locally-cached emails that were updated.
+
+    This is what lets read/starred toggles made on another device (or directly
+    in Gmail) propagate to this client: the periodic sync job calls
+    incremental_sync, which now captures labelAdded/labelRemoved records and
+    flows them through here.
+    """
+    if not label_changes:
+        return 0
+    # Map gmail message id -> local Email row for this account only.
+    gmids = list(label_changes.keys())
+    rows = db.query(Email).filter(
+        Email.account_id == account.id,
+        Email.gmail_message_id.in_(gmids),
+    ).all()
+    changed = 0
+    for row in rows:
+        ops = label_changes.get(row.gmail_message_id)
+        if not ops:
+            continue
+        touched = False
+        if "UNREAD" in ops["remove"] and not row.is_read:
+            row.is_read = True
+            touched = True
+        elif "UNREAD" in ops["add"] and row.is_read:
+            row.is_read = False
+            touched = True
+        if "STARRED" in ops["add"] and not row.is_starred:
+            row.is_starred = True
+            touched = True
+        elif "STARRED" in ops["remove"] and row.is_starred:
+            row.is_starred = False
+            touched = True
+        if touched:
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
 
 
 def _update_history_and_sync(db: Session, account: Account, service: Any,

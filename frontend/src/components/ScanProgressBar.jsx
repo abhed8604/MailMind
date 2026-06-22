@@ -7,9 +7,8 @@ import { useEffect, useState, useRef } from 'react'
  *   running   — boolean, true while a scan is active
  *   progress  — { scanned, total } or null
  *   onCancel  — cancel callback
- *   amoled    — boolean, AMOLED mode active
  */
-export default function ScanProgressBar({ running, progress, onCancel, amoled }) {
+export default function ScanProgressBar({ running, progress, onCancel }) {
   const [fading, setFading] = useState(false)
   const [show, setShow] = useState(false)
   const fadeTimer = useRef(null)
@@ -47,15 +46,15 @@ export default function ScanProgressBar({ running, progress, onCancel, amoled })
         bottom: 20,
         right: 24,
         zIndex: 10,
-        background: amoled ? '#0a0a0a' : '#1e1e32',
-        border: '0.5px solid rgba(255,255,255,0.12)',
+        background: 'var(--bg-reader)',
+        border: '0.5px solid var(--border-strong)',
         borderRadius: 999,
         padding: '6px 14px',
         display: 'flex',
         alignItems: 'center',
         gap: 8,
         fontSize: 12,
-        color: 'rgba(255,255,255,0.7)',
+        color: 'var(--text-sender)',
         transition: 'opacity 0.4s ease',
         opacity: fading ? 0 : 1,
       }}
@@ -73,12 +72,12 @@ export default function ScanProgressBar({ running, progress, onCancel, amoled })
       />
 
       {/* Label text */}
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-body)' }}>
         {completed ? 'Relevance scores ready' : 'Scanning relevance scores'}
       </span>
 
       {/* Progress count */}
-      <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-headline)' }}>
         {scanned}/{total}
       </span>
 
@@ -88,15 +87,15 @@ export default function ScanProgressBar({ running, progress, onCancel, amoled })
           onClick={(e) => { e.stopPropagation(); onCancel?.() }}
           style={{
             fontSize: 11,
-            color: 'rgba(255,255,255,0.35)',
+            color: 'var(--text-dim)',
             cursor: 'pointer',
             border: 'none',
             background: 'none',
             padding: 0,
             lineHeight: 'inherit',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-sender)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-dim)' }}
         >
           × Cancel
         </span>

@@ -3,9 +3,11 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   MailMind — flat dark theme
-   Three panels: sidebar (#0e0e1a) | list (#16162a) | reading (#1a1a2e).
-   No gradients, no box-shadows, no blur. All layered color via rgba().
+   MailMind — theme system
+   Three panels: sidebar | list | reading. Four themes selectable by the
+   data-theme attribute on .app-shell: default (current dark), dark, light,
+   amoled (pure black). All components read colour from the CSS variables
+   below instead of hardcoding hex/rgba values.
    ===========================================================================
    COLOR CONSISTENCY LOCK (skill §4.2) — one accent per the page.
      PRIMARY ACCENT (interactive / brand):  #5B8DEF (blue)
@@ -50,10 +52,176 @@ body,
   --space-xl: 24px;
 }
 
+/* ---------------------------------------------------------------------------
+   THEME TOKENS. Four palettes selected by [data-theme="..."] on .app-shell.
+   Each defines a full set of semantic colour variables; every component
+   reads from these so a single attribute swap re-themes the whole app.
+   ------------------------------------------------------------------------- */
+:root[data-theme="default"] {
+  color-scheme: dark;
+  --bg-body: #0e0e1a;
+  --bg-sidebar: #0e0e1a;
+  --bg-list: #16162a;
+  --bg-reader: #1a1a2e;
+  --bg-settings: #16162a;
+  --bg-meta: rgba(255,255,255,0.04);
+  --bg-meta-amoled: rgba(255,255,255,0.03);
+  --text-primary: rgba(255,255,255,0.88);
+  --text-headline: rgba(255,255,255,0.92);
+  --text-sender: rgba(255,255,255,0.72);
+  --text-subject: rgba(255,255,255,0.55);
+  --text-preview: rgba(255,255,255,0.45);
+  --text-timestamp: rgba(255,255,255,0.35);
+  --text-label: rgba(255,255,255,0.80);
+  --text-hint: rgba(255,255,255,0.45);
+  --text-dim: rgba(255,255,255,0.32);
+  --text-faint: rgba(255,255,255,0.28);
+  --text-muted: rgba(255,255,255,0.50);
+  --text-body: rgba(255,255,255,0.60);
+  --text-link: #7eaaff;
+  --text-body-strong: rgba(255,255,255,0.85);
+  --border: rgba(255,255,255,0.06);
+  --border-subtle: rgba(255,255,255,0.05);
+  --border-strong: rgba(255,255,255,0.09);
+  --border-faint: rgba(255,255,255,0.07);
+  --surface-fill: rgba(255,255,255,0.06);
+  --surface-fill-subtle: rgba(255,255,255,0.04);
+  --surface-fill-faint: rgba(255,255,255,0.02);
+  --surface-hover: rgba(255,255,255,0.04);
+  --scrollbar-thumb: rgba(255,255,255,0.12);
+  --skeleton-base: rgba(255,255,255,0.04);
+  --skeleton-shine: rgba(255,255,255,0.09);
+  --drawer-backdrop: rgba(0,0,0,0.6);
+  --select-option-bg: #1a1a1a;
+  /* The reader placeholder "Select an email" hint colour. */
+  --placeholder-icon: rgba(255,255,255,0.45);
+}
+
+/* "Dark" is a slightly different dark — warmer/neutral graphite, distinct
+   from the default indigo-tinted dark so the user can feel the difference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-body: #121212;
+  --bg-sidebar: #121212;
+  --bg-list: #1a1a1a;
+  --bg-reader: #1e1e1e;
+  --bg-settings: #1a1a1a;
+  --bg-meta: rgba(255,255,255,0.04);
+  --bg-meta-amoled: rgba(255,255,255,0.03);
+  --text-primary: rgba(255,255,255,0.88);
+  --text-headline: rgba(255,255,255,0.92);
+  --text-sender: rgba(255,255,255,0.72);
+  --text-subject: rgba(255,255,255,0.55);
+  --text-preview: rgba(255,255,255,0.45);
+  --text-timestamp: rgba(255,255,255,0.35);
+  --text-label: rgba(255,255,255,0.80);
+  --text-hint: rgba(255,255,255,0.45);
+  --text-dim: rgba(255,255,255,0.32);
+  --text-faint: rgba(255,255,255,0.28);
+  --text-muted: rgba(255,255,255,0.50);
+  --text-body: rgba(255,255,255,0.60);
+  --text-link: #7eaaff;
+  --text-body-strong: rgba(255,255,255,0.85);
+  --border: rgba(255,255,255,0.08);
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.12);
+  --border-faint: rgba(255,255,255,0.07);
+  --surface-fill: rgba(255,255,255,0.06);
+  --surface-fill-subtle: rgba(255,255,255,0.04);
+  --surface-fill-faint: rgba(255,255,255,0.02);
+  --surface-hover: rgba(255,255,255,0.04);
+  --scrollbar-thumb: rgba(255,255,255,0.14);
+  --skeleton-base: rgba(255,255,255,0.04);
+  --skeleton-shine: rgba(255,255,255,0.09);
+  --drawer-backdrop: rgba(0,0,0,0.6);
+  --select-option-bg: #2a2a2a;
+  --placeholder-icon: rgba(255,255,255,0.45);
+}
+
+/* Light — warm cream, per SKILL.md: not pure white, warm paper feel. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-body: #faf6f0;
+  --bg-sidebar: #faf6f0;
+  --bg-list: #f3ede4;
+  --bg-reader: #ede7dc;
+  --bg-settings: #f3ede4;
+  --bg-meta: rgba(0,0,0,0.03);
+  --bg-meta-amoled: rgba(0,0,0,0.025);
+  --text-primary: rgba(30,25,20,0.88);
+  --text-headline: rgba(20,16,12,0.95);
+  --text-sender: rgba(30,25,20,0.65);
+  --text-subject: rgba(30,25,20,0.78);
+  --text-preview: rgba(30,25,20,0.55);
+  --text-timestamp: rgba(30,25,20,0.45);
+  --text-label: rgba(30,25,20,0.80);
+  --text-hint: rgba(30,25,20,0.45);
+  --text-dim: rgba(30,25,20,0.40);
+  --text-faint: rgba(30,25,20,0.35);
+  --text-muted: rgba(30,25,20,0.50);
+  --text-body: rgba(30,25,20,0.72);
+  --text-link: #2563eb;
+  --text-body-strong: rgba(20,16,12,0.90);
+  --border: rgba(0,0,0,0.08);
+  --border-subtle: rgba(0,0,0,0.06);
+  --border-strong: rgba(0,0,0,0.12);
+  --border-faint: rgba(0,0,0,0.06);
+  --surface-fill: rgba(0,0,0,0.04);
+  --surface-fill-subtle: rgba(0,0,0,0.03);
+  --surface-fill-faint: rgba(0,0,0,0.015);
+  --surface-hover: rgba(0,0,0,0.02);
+  --scrollbar-thumb: rgba(0,0,0,0.16);
+  --skeleton-base: rgba(0,0,0,0.04);
+  --skeleton-shine: rgba(0,0,0,0.08);
+  --drawer-backdrop: rgba(30,25,20,0.4);
+  --select-option-bg: #ffffff;
+  --placeholder-icon: rgba(30,25,20,0.40);
+}
+
+/* AMOLED — pure black for OLED panels. */
+:root[data-theme="amoled"] {
+  color-scheme: dark;
+  --bg-body: #000000;
+  --bg-sidebar: #000000;
+  --bg-list: #000000;
+  --bg-reader: #000000;
+  --bg-settings: #000000;
+  --bg-meta: rgba(255,255,255,0.03);
+  --bg-meta-amoled: rgba(255,255,255,0.03);
+  --text-primary: rgba(255,255,255,0.88);
+  --text-headline: rgba(255,255,255,0.92);
+  --text-sender: rgba(255,255,255,0.72);
+  --text-subject: rgba(255,255,255,0.55);
+  --text-preview: rgba(255,255,255,0.45);
+  --text-timestamp: rgba(255,255,255,0.35);
+  --text-label: rgba(255,255,255,0.80);
+  --text-hint: rgba(255,255,255,0.45);
+  --text-dim: rgba(255,255,255,0.32);
+  --text-faint: rgba(255,255,255,0.28);
+  --text-muted: rgba(255,255,255,0.50);
+  --text-body: rgba(255,255,255,0.60);
+  --text-link: #7eaaff;
+  --text-body-strong: rgba(255,255,255,0.85);
+  --border: rgba(255,255,255,0.10);
+  --border-subtle: rgba(255,255,255,0.05);
+  --border-strong: rgba(255,255,255,0.14);
+  --border-faint: rgba(255,255,255,0.07);
+  --surface-fill: rgba(255,255,255,0.06);
+  --surface-fill-subtle: rgba(255,255,255,0.04);
+  --surface-fill-faint: rgba(255,255,255,0.02);
+  --surface-hover: rgba(255,255,255,0.04);
+  --scrollbar-thumb: rgba(255,255,255,0.14);
+  --skeleton-base: rgba(255,255,255,0.04);
+  --skeleton-shine: rgba(255,255,255,0.09);
+  --drawer-backdrop: rgba(0,0,0,0.7);
+  --select-option-bg: #1a1a1a;
+  --placeholder-icon: rgba(255,255,255,0.45);
+}
+
 body {
   margin: 0;
-  background: #0e0e1a;
-  color: rgba(255, 255, 255, 0.88);
+  background: var(--bg-body, #0e0e1a);
+  color: var(--text-primary);
   font-family: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
@@ -73,12 +241,12 @@ body {
   overflow: hidden;
 }
 
-/* --- Text hierarchy helpers (white at decreasing opacity) --------------- */
-.text-primary   { color: rgba(255, 255, 255, 0.88); }
-.text-sender    { color: rgba(255, 255, 255, 0.72); }
-.text-subject   { color: rgba(255, 255, 255, 0.55); }
-.text-preview   { color: rgba(255, 255, 255, 0.30); }
-.text-timestamp { color: rgba(255, 255, 255, 0.22); }
+/* --- Text hierarchy helpers -------------------------------------------- */
+.text-primary   { color: var(--text-primary); }
+.text-sender    { color: var(--text-sender); }
+.text-subject   { color: var(--text-subject); }
+.text-preview   { color: var(--text-preview); }
+.text-timestamp { color: var(--text-timestamp); }
 
 /* --- Line clamps ------------------------------------------------------- */
 .clamp-2 {
@@ -105,7 +273,7 @@ body {
 
 /* --- Dividers ---------------------------------------------------------- */
 .divider {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--border);
 }
 
 /* --- Resizable panel divider (drag to resize list / reading pane) ------ */
@@ -121,7 +289,7 @@ body {
   content: '';
   position: absolute;
   inset: 0 1.5px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-hover);
   transition: background 0.15s ease;
 }
 .resize-divider:hover::after,
@@ -132,31 +300,31 @@ body {
 /* --- Scrollbars -------------------------------------------------------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* --- Rendered email body ---------------------------------------------- */
 .email-body {
-  color: rgba(255, 255, 255, 0.60);
+  color: var(--text-body);
   line-height: 1.75;
   font-size: 13px;
 }
 .email-body p { margin: 0 0 10px; }
 .email-body ul, .email-body ol { margin: 0 0 10px 18px; }
 .email-body li { margin-bottom: 3px; }
-.email-body a { color: #7eaaff; text-decoration: underline; }
-.email-body b, .email-body strong { color: rgba(255, 255, 255, 0.85); font-weight: 500; }
+.email-body a { color: var(--text-link); text-decoration: underline; }
+.email-body b, .email-body strong { color: var(--text-body-strong); font-weight: 500; }
 .email-body img { max-width: 100%; border-radius: 8px; }
 .email-body code {
   font-family: ui-monospace, monospace;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-fill);
   padding: 1px 4px;
   border-radius: 4px;
 }
@@ -168,9 +336,9 @@ body {
 }
 .skeleton {
   background: linear-gradient(90deg,
-    rgba(255,255,255,0.04) 25%,
-    rgba(255,255,255,0.09) 37%,
-    rgba(255,255,255,0.04) 63%);
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 37%,
+    var(--skeleton-base) 63%);
   background-size: 800px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -183,7 +351,7 @@ body {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  border: 1.5px solid var(--border-strong);
   border-top-color: #f0a030;
   animation: spin 0.8s linear infinite;
   display: inline-block;
@@ -246,7 +414,7 @@ body {
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.2px;
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--text-headline);
   }
   .mobile-reader-overlay aside > div:first-child {
     padding-top: calc(8px + env(safe-area-inset-top)) !important;
@@ -259,7 +427,7 @@ body {
   .mobile-drawer-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--drawer-backdrop);
     z-index: 90;
     animation: fadeIn 0.15s ease-out;
   }
@@ -281,15 +449,15 @@ body {
     width: 34px;
     height: 34px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 0.5px solid rgba(255, 255, 255, 0.09);
+    background: var(--surface-fill);
+    border: 0.5px solid var(--border-strong);
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--text-sender);
     transition: color 0.15s ease;
   }
-  .mm-list-hamburger:hover { color: rgba(255, 255, 255, 1); }
+  .mm-list-hamburger:hover { color: var(--text-headline); }
 
   /* Hide desktop resize divider */
   .resize-divider { display: none !important; }
@@ -305,7 +473,7 @@ body {
     justify-content: center;
     background: transparent;
     border: none;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--text-hint);
     cursor: pointer;
   }
 
@@ -314,10 +482,9 @@ body {
     position: fixed;
     inset: 0;
     z-index: 40;
-    background: #1a1a2e;
+    background: var(--bg-reader);
     animation: slideInRight 0.22s ease-out;
   }
-  .mobile-reader-overlay.amoled { background: #000000; }
 
   /* Tighter padding in email reader on mobile to maximize content width.
      !important is required to override the inline styles set by EmailReader. */
@@ -369,5 +536,5 @@ body {
 button:focus { outline: none; }
 
 /* --- Input placeholders (WCAG AA contrast) ----------------------------- */
-.mm-search-input::placeholder { color: rgba(255, 255, 255, 0.50); }
+.mm-search-input::placeholder { color: var(--text-muted); }
 .mm-search-input::placeholder { opacity: 1; }

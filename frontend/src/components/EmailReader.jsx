@@ -43,7 +43,7 @@ function linkifyText(text) {
 export default function EmailReader({
   email, account, bodyLoading, onToggleRead, onToggleStar,
   onClose, onToast, onRescanned, scanRunning, scanProgress,
-  onCancelScan, amoled, accountColorMap,
+  onCancelScan, accountColorMap,
 }) {
   const [rescanning, setRescanning] = useState(false)
   const [replyText, setReplyText] = useState('')
@@ -59,16 +59,15 @@ export default function EmailReader({
     return (
       <aside
         className="flex-1 h-full flex flex-col items-center justify-center"
-        style={{ background: amoled ? '#000000' : '#1a1a2e', position: 'relative' }}
+        style={{ background: 'var(--bg-reader)', position: 'relative' }}
       >
-        <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <span className="text-[13px]" style={{ color: 'var(--placeholder-icon)' }}>
           Select an email to read it.
         </span>
         <ScanProgressBar
           running={scanRunning}
           progress={scanProgress}
           onCancel={onCancelScan}
-          amoled={amoled}
         />
       </aside>
     )
@@ -104,34 +103,39 @@ export default function EmailReader({
   return (
     <aside
       className="flex-1 min-w-0 h-full flex flex-col"
-      style={{ background: amoled ? '#000000' : '#1a1a2e', position: 'relative' }}
+      style={{ background: 'var(--bg-reader)', position: 'relative' }}
     >
       {/* ---- TOOLBAR (top bar) ---- */}
       <div
         className="flex items-center justify-between shrink-0"
-        style={{ padding: '8px 14px', borderBottom: '0.5px solid rgba(255,255,255,0.07)' }}
+        style={{ padding: '8px 14px', borderBottom: '0.5px solid var(--border-faint)' }}
       >
         {/* Left: category tag pill */}
         <div className="flex items-center gap-2">
           {email.category && (
             <span
-              className="rounded-full"
+              className="rounded-full inline-flex items-center"
               style={{
                 fontSize: '10px',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'rgba(255,255,255,0.28)',
+                background: 'var(--surface-fill)',
+                color: 'var(--text-faint)',
                 padding: '2px 7px',
+                gap: 3,
+                lineHeight: 1,
               }}
             >
-              <cat.glyph size={11} weight="fill" color="rgba(255,255,255,0.45)" aria-hidden="true" /> {cat.label} · {email.category === 'spam' ? 'spam' : 'promotional'}
+              <cat.glyph size={11} weight="fill" color="var(--text-hint)" aria-hidden="true" />
+              <span>{cat.label}</span>
             </span>
           )}
           {(email.scanned_at || email.importance_score != null) && (
             <button
               onClick={handleRescan}
               disabled={rescanning}
-              className="text-[10px] uppercase tracking-wide transition-colors disabled:opacity-30 hover:text-white"
-              style={{ color: 'rgba(255,255,255,0.55)' }}
+              className="text-[10px] uppercase tracking-wide transition-colors disabled:opacity-30"
+              style={{ color: 'var(--text-hint)' }}
+              onMouseEnter={(e) => { if (!rescanning) e.currentTarget.style.color = 'var(--text-headline)' }}
+              onMouseLeave={(e) => { if (!rescanning) e.currentTarget.style.color = 'var(--text-hint)' }}
             >
               {rescanning ? 'Scanning…' : 'Rescan'}
             </button>
@@ -176,13 +180,13 @@ export default function EmailReader({
         <div
           className="mx-4 mt-3 mm-email-meta"
           style={{
-            background: amoled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.04)',
+            background: 'var(--bg-meta)',
             borderRadius: 'var(--radius-surface)',
             padding: '14px 16px',
           }}
         >
           {/* Subject — primary tier */}
-          <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'rgba(255,255,255,0.92)', lineHeight: '1.3', letterSpacing: '-0.01em' }}>
+          <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-headline)', lineHeight: '1.3', letterSpacing: '-0.01em' }}>
             {email.subject || '(no subject)'}
           </h1>
 
@@ -195,7 +199,7 @@ export default function EmailReader({
           {/* Badge row — footer tier (divided, reduced weight) */}
           <div
             className="flex items-center gap-2 mt-3"
-            style={{ paddingTop: 'var(--space-sm)', borderTop: '0.5px solid rgba(255,255,255,0.07)' }}
+            style={{ paddingTop: 'var(--space-sm)', borderTop: '0.5px solid var(--border-faint)' }}
           >
             {/* Relevance score chip */}
             {score != null && (
@@ -233,7 +237,7 @@ export default function EmailReader({
             {/* Star */}
             <span
               className="cursor-pointer shrink-0"
-              style={{ color: email.is_starred ? '#f0a030' : 'rgba(255,255,255,0.30)', fontSize: '14px' }}
+              style={{ color: email.is_starred ? '#f0a030' : 'var(--text-preview)', fontSize: '14px' }}
               onClick={() => onToggleStar?.(email)}
             >
               <StarIcon width={14} height={14} filled={email.is_starred} />
@@ -257,7 +261,7 @@ export default function EmailReader({
                 <Sparkle size={11} weight="fill" style={{ verticalAlign: '-1px', marginRight: 4 }} aria-hidden="true" />AI Summary
               </span>
             </div>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.60)', lineHeight: '1.6', margin: 0 }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-body)', lineHeight: '1.6', margin: 0 }}>
               {email.ai_summary}
             </p>
           </div>
@@ -282,7 +286,6 @@ export default function EmailReader({
         running={scanRunning}
         progress={scanProgress}
         onCancel={onCancelScan}
-        amoled={amoled}
       />
 
       {/* ---- REPLY BAR (pinned to bottom) ---- */}
@@ -290,15 +293,15 @@ export default function EmailReader({
         className="shrink-0 flex items-center gap-2 mm-reply-bar"
         style={{
           padding: '8px 14px',
-          background: 'rgba(255,255,255,0.02)',
-          borderTop: '0.5px solid rgba(255,255,255,0.07)',
+          background: 'var(--surface-fill-faint)',
+          borderTop: '0.5px solid var(--border-faint)',
         }}
       >
         <div
           className="flex items-center flex-1"
           style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '0.5px solid rgba(255,255,255,0.09)',
+            background: 'var(--surface-fill)',
+            border: '0.5px solid var(--border-strong)',
             borderRadius: 'var(--radius-surface)',
             padding: '8px 12px',
           }}
@@ -309,7 +312,7 @@ export default function EmailReader({
             onChange={(e) => setReplyText(e.target.value)}
             placeholder={`Reply to ${senderLabel}...`}
             className="bg-transparent flex-1 text-[12px] focus:outline-none"
-            style={{ color: 'rgba(255,255,255,0.80)' }}
+            style={{ color: 'var(--text-label)' }}
           />
         </div>
         <button
@@ -335,10 +338,10 @@ export default function EmailReader({
 function MetaRow({ label, value }) {
   return (
     <div className="flex gap-2">
-      <span className="shrink-0" style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', width: 34 }}>
+      <span className="shrink-0" style={{ fontSize: '11px', color: 'var(--text-hint)', width: 34 }}>
         {label}
       </span>
-      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)' }}>
+      <span style={{ fontSize: '11px', color: 'var(--text-sender)' }}>
         {value}
       </span>
     </div>
@@ -355,11 +358,11 @@ function ActionButton({ children, label, onClick, active }) {
       onClick={onClick}
       className="transition-colors"
       style={{
-        color: active ? '#f0a030' : 'rgba(255,255,255,0.55)',
+        color: active ? '#f0a030' : 'var(--text-hint)',
         background: 'transparent',
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.90)' }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-headline)' }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-hint)' }}
     >
       {children}
     </button>

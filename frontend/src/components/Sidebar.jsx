@@ -1,6 +1,6 @@
 import {
   MailIcon, ScanIcon, RescanIcon, DownloadIcon,
-  SettingsIcon, BrainIcon, CloseIcon,
+  SettingsIcon, BrainIcon, CloseIcon, DashboardIcon,
 } from './Icon'
 
 // Status dot colors for the LLM model indicator.
@@ -8,7 +8,7 @@ const MODEL_STATUS_COLOR = {
   ready: '#4ecf8e',
   loading: '#f0a030',
   unavailable: '#f87171',
-  unknown: 'rgba(255,255,255,0.25)',
+  unknown: 'var(--text-faint)',
 }
 
 /**
@@ -23,7 +23,6 @@ export default function Sidebar({
   view, onView,
   syncStatus, mockMode, scanRunning, onScan, onRescanAll, onSyncNow,
   modelStatus, modelBusy, onWarmupModel,
-  amoled,
   accounts = [],
   selectedAccount,
   onSelectAccount,
@@ -42,7 +41,7 @@ export default function Sidebar({
   return (
     <aside
       className="w-[48px] shrink-0 h-full flex flex-col items-center py-3 overflow-hidden"
-      style={{ background: amoled ? '#000000' : '#0e0e1a', borderRight: '1px solid rgba(255,255,255,0.06)' }}
+      style={{ background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)' }}
     >
       {/* Mobile close button — top of the drawer. Hidden on desktop (CSS). */}
       {onClose && (
@@ -60,6 +59,9 @@ export default function Sidebar({
       <div className="flex flex-col items-center gap-1.5">
         <IconBtn label="Mail" active={view === 'inbox'} onClick={() => onView('inbox')}>
           <MailIcon width={18} height={18} />
+        </IconBtn>
+        <IconBtn label="Dashboard" active={view === 'dashboard'} onClick={() => onView('dashboard')}>
+          <DashboardIcon width={18} height={18} />
         </IconBtn>
         <IconBtn
           label="Scan Important"
@@ -115,7 +117,7 @@ export default function Sidebar({
       {accounts.length > 0 && (
         <div className="flex flex-col items-center gap-1.5 mb-2">
           {accounts.map((a) => {
-            const ramp = (accountColorMap && accountColorMap.get(a.id)) || { color: 'rgba(255,255,255,0.55)', pillBg: 'rgba(255,255,255,0.10)' }
+            const ramp = (accountColorMap && accountColorMap.get(a.id)) || { color: 'var(--text-sender)', pillBg: 'var(--surface-fill)' }
             const active = selectedAccount === a.id
             const initial = (a.email || '?').charAt(0).toUpperCase()
             return (
@@ -162,19 +164,19 @@ function IconBtn({ children, label, active, onClick, disabled }) {
       className="relative h-[34px] w-[34px] rounded-lg flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
       style={{
         background: active ? 'rgba(91,141,239,0.18)' : 'transparent',
-        color: active ? '#7eaaff' : 'rgba(255,255,255,0.45)',
+        color: active ? '#7eaaff' : 'var(--text-hint)',
       }}
       onMouseEnter={(e) => {
         if (disabled) return
         if (!active) {
-          e.currentTarget.style.color = 'rgba(255,255,255,0.75)'
-          e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+          e.currentTarget.style.color = 'var(--text-sender)'
+          e.currentTarget.style.background = 'var(--surface-hover)'
         }
       }}
       onMouseLeave={(e) => {
         if (disabled) return
         if (!active) {
-          e.currentTarget.style.color = 'rgba(255,255,255,0.45)'
+          e.currentTarget.style.color = 'var(--text-hint)'
           e.currentTarget.style.background = 'transparent'
         }
       }}
